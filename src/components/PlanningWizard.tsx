@@ -65,6 +65,8 @@ export default function PlanningWizard({ classes, lessons, rooms, currentYear, t
   const [saved, setSaved] = useState<string[]>([]);
 
   const myLessons = lessons.filter((l) => l.teacher_id === teacherId);
+  const hasClasses = classes.length > 0;
+  const hasMyLessons = myLessons.length > 0;
 
   function getEntriesForCell(classId: string, day: DayOfWeek, time: string) {
     return scheduledHere.filter(
@@ -191,8 +193,34 @@ export default function PlanningWizard({ classes, lessons, rooms, currentYear, t
 
   const lessonMap = Object.fromEntries(lessons.map((l) => [l.id, l]));
 
+  if (!hasClasses) {
+    return (
+      <div className="text-center py-16 bg-white border border-gray-200 rounded-xl">
+        <p className="text-4xl mb-3">🏫</p>
+        <p className="text-lg font-semibold text-gray-700 mb-1">אין כיתות במערכת</p>
+        <p className="text-sm text-gray-500 mb-4">לפני שניתן לתכנן, יש להוסיף בתי ספר וכיתות.</p>
+        <Link href="/admin" className="inline-block bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700">
+          עבור לניהול מערכת
+        </Link>
+      </div>
+    );
+  }
+
   return (
     <div>
+      {!hasMyLessons && (
+        <div className="mb-4 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-center gap-3 text-sm">
+          <span className="text-xl">📝</span>
+          <span className="text-amber-800">
+            אין לך שיעורים בבנק עדיין.{" "}
+            <Link href="/lessons/new" className="font-medium underline hover:text-amber-900">
+              צור שיעור חדש
+            </Link>
+            {" "}כדי שתוכל לשבץ אותו בלוח.
+          </span>
+        </div>
+      )}
+
       {/* בחירת כיתה — מקובצת לפי בית ספר */}
       <div className="mb-6">
         <p className="text-sm font-medium text-gray-700 mb-3">בחר כיתה לתכנון:</p>
