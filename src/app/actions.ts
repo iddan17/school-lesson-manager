@@ -6,7 +6,7 @@ import type { DayOfWeek } from "@/lib/types";
 
 // ===== AUTH =====
 
-export async function login(formData: FormData) {
+export async function login(_: unknown, formData: FormData) {
   const supabase = await createClient();
   const email = formData.get("email") as string;
   const password = formData.get("password") as string;
@@ -15,7 +15,7 @@ export async function login(formData: FormData) {
   redirect("/dashboard");
 }
 
-export async function register(formData: FormData) {
+export async function register(_: unknown, formData: FormData) {
   const supabase = await createClient();
   const email = formData.get("email") as string;
   const password = formData.get("password") as string;
