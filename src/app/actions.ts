@@ -68,6 +68,23 @@ export async function createSubjectInline(formData: FormData) {
   return { subject: data };
 }
 
+export async function updateSubjectInline(id: string, formData: FormData) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("subjects").update({
+    name: formData.get("name") as string,
+    color: formData.get("color") as string,
+  }).eq("id", id);
+  if (error) return { error: error.message };
+  return { success: true };
+}
+
+export async function deleteSubjectInline(id: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("subjects").delete().eq("id", id);
+  if (error) return { error: error.message };
+  return { success: true };
+}
+
 export async function createRoomInline(formData: FormData) {
   const supabase = await createClient();
   const capacity = formData.get("capacity") as string;
@@ -78,6 +95,24 @@ export async function createRoomInline(formData: FormData) {
     .single();
   if (error) return { error: error.message };
   return { room: data };
+}
+
+export async function updateRoomInline(id: string, formData: FormData) {
+  const supabase = await createClient();
+  const capacity = formData.get("capacity") as string;
+  const { error } = await supabase.from("rooms").update({
+    name: formData.get("name") as string,
+    capacity: capacity ? parseInt(capacity) : null,
+  }).eq("id", id);
+  if (error) return { error: error.message };
+  return { success: true };
+}
+
+export async function deleteRoomInline(id: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("rooms").delete().eq("id", id);
+  if (error) return { error: error.message };
+  return { success: true };
 }
 
 // ===== LESSONS =====
