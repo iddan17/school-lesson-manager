@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import type { DayOfWeek } from "@/lib/types";
 
 // ===== AUTH =====
@@ -33,6 +34,50 @@ export async function logout() {
   const supabase = await createClient();
   await supabase.auth.signOut();
   redirect("/auth/login");
+}
+
+export async function forgotPassword(_: unknown, formData: FormData) {
+  const supabase = await createClient();
+  const email = formData.get("email") as string;
+  const headersList = await headers();
+  const origin =
+    headersList.get("origin") ??
+    `${headersList.get("x-forwarded-proto") ?? "http"}://${headersList.get("host") ?? "localhost:3001"}`;
+  await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${origin}/auth/reset-password`,
+  });
+  return { success: true };
+}
+
+export async function updatePassword(_: unknown, formData: FormData) {
+  const supabase = await createClient();
+  const password = formData.get("password") as string;
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) return { error: error.message };
+  redirect("/dashboard");
+}
+
+export async function createSubjectInline(formData: FormData) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("subjects")
+    .insert({ name: formData.get("name") as string, color: formData.get("color") as string })
+    .select()
+    .single();
+  if (error) return { error: error.message };
+  return { subject: data };
+}
+
+export async function createRoomInline(formData: FormData) {
+  const supabase = await createClient();
+  const capacity = formData.get("capacity") as string;
+  const { data, error } = await supabase
+    .from("rooms")
+    .insert({ name: formData.get("name") as string, capacity: capacity ? parseInt(capacity) : null })
+    .select()
+    .single();
+  if (error) return { error: error.message };
+  return { room: data };
 }
 
 // ===== LESSONS =====

@@ -50,6 +50,7 @@ export default async function EditLessonPage({ params }: { params: Promise<{ id:
             lesson={lessonWithSubjects as any}
             action={updateLesson.bind(null, id)}
             submitLabel="שמור שינויים"
+            isAdmin={profile?.role === "admin"}
           />
         </div>
       </main>

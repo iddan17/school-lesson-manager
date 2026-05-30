@@ -44,7 +44,12 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <p className="mt-4 text-sm text-center text-gray-500">
+        <p className="mt-3 text-sm text-center">
+          <Link href="/auth/forgot-password" className="text-gray-500 hover:text-blue-600 hover:underline">
+            שכחתי סיסמה
+          </Link>
+        </p>
+        <p className="mt-2 text-sm text-center text-gray-500">
           אין לך חשבון?{" "}
           <Link href="/auth/register" className="text-blue-600 hover:underline">
             הרשמה

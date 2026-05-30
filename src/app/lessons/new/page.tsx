@@ -6,9 +6,11 @@ import Link from "next/link";
 
 export default async function NewLessonPage() {
   const supabase = await createClient();
-  const [{ data: subjects }, { data: rooms }] = await Promise.all([
+  const { data: { user } } = await supabase.auth.getUser();
+  const [{ data: subjects }, { data: rooms }, { data: profile }] = await Promise.all([
     supabase.from("subjects").select("*").order("name"),
     supabase.from("rooms").select("*").order("name"),
+    supabase.from("profiles").select("role").eq("id", user!.id).single(),
   ]);
 
   return (
@@ -27,6 +29,7 @@ export default async function NewLessonPage() {
             rooms={rooms ?? []}
             action={createLesson}
             submitLabel="צור שיעור"
+            isAdmin={profile?.role === "admin"}
           />
         </div>
       </main>
