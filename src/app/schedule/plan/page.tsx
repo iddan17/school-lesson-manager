@@ -7,7 +7,7 @@ export default async function PlanPage() {
   const { data: { user } } = await supabase.auth.getUser();
 
   const [{ data: classes }, { data: lessons }, { data: rooms }, { data: profile }] = await Promise.all([
-    supabase.from("classes").select("*, school:schools(id, name)").order("school_id").order("grade"),
+    supabase.from("classes").select("*").order("grade"),
     supabase
       .from("lessons")
       .select(`*, subjects:lesson_subjects(subject:subjects(*)), teacher:profiles(full_name)`)

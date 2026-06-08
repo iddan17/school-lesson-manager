@@ -87,10 +87,9 @@ export async function deleteSubjectInline(id: string) {
 
 export async function createRoomInline(formData: FormData) {
   const supabase = await createClient();
-  const capacity = formData.get("capacity") as string;
   const { data, error } = await supabase
     .from("rooms")
-    .insert({ name: formData.get("name") as string, capacity: capacity ? parseInt(capacity) : null })
+    .insert({ name: formData.get("name") as string })
     .select()
     .single();
   if (error) return { error: error.message };
@@ -99,10 +98,8 @@ export async function createRoomInline(formData: FormData) {
 
 export async function updateRoomInline(id: string, formData: FormData) {
   const supabase = await createClient();
-  const capacity = formData.get("capacity") as string;
   const { error } = await supabase.from("rooms").update({
     name: formData.get("name") as string,
-    capacity: capacity ? parseInt(capacity) : null,
   }).eq("id", id);
   if (error) return { error: error.message };
   return { success: true };
@@ -301,11 +298,7 @@ export async function deleteClass(id: string) {
 
 export async function createRoom(formData: FormData): Promise<void> {
   const supabase = await createClient();
-  const capacity = formData.get("capacity") as string;
-  await supabase.from("rooms").insert({
-    name: formData.get("name") as string,
-    capacity: capacity ? parseInt(capacity) : null,
-  });
+  await supabase.from("rooms").insert({ name: formData.get("name") as string });
   redirect("/admin");
 }
 

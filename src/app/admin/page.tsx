@@ -119,7 +119,6 @@ export default async function AdminPage() {
               <thead className="bg-gray-50 text-gray-600">
                 <tr>
                   <th className="text-right px-4 py-2">שם</th>
-                  <th className="text-right px-4 py-2">קיבולת</th>
                   <th className="px-4 py-2"></th>
                 </tr>
               </thead>
@@ -127,7 +126,6 @@ export default async function AdminPage() {
                 {rooms?.map((room) => (
                   <tr key={room.id} className="border-t border-gray-100">
                     <td className="px-4 py-2 font-medium">{room.name}</td>
-                    <td className="px-4 py-2 text-gray-500">{room.capacity ?? "—"}</td>
                     <td className="px-4 py-2 text-left">
                       <form action={deleteRoom.bind(null, room.id)}>
                         <button type="submit" className="text-red-500 hover:text-red-700 text-xs">מחק</button>
@@ -138,10 +136,8 @@ export default async function AdminPage() {
               </tbody>
             </table>
             <form action={createRoom} className="flex gap-2 p-3 border-t border-gray-100 bg-gray-50">
-              <input name="name" placeholder="שם חדר (מעבדה)" required
+              <input name="name" placeholder="שם חדר (מעבדה, אולם...)" required
                 className="flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-sm" />
-              <input name="capacity" type="number" placeholder="קיבולת" min={1}
-                className="w-24 border border-gray-300 rounded-lg px-3 py-1.5 text-sm" />
               <button type="submit" className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-blue-700">
                 + הוסף
               </button>

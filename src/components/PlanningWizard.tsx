@@ -5,7 +5,6 @@ import type { Class, Room, DayOfWeek, Subject } from "@/lib/types";
 import { DAY_NAMES, TIME_SLOTS, classDisplayName } from "@/lib/types";
 import { createScheduleEntry } from "@/app/actions";
 import RoomBookingConflict from "./RoomBookingConflict";
-import SubjectBadge from "./SubjectBadge";
 import Link from "next/link";
 
 interface LessonWithJoins {
@@ -54,7 +53,7 @@ interface ConflictState {
 const DAYS: DayOfWeek[] = [0, 1, 2, 3, 4];
 
 export default function PlanningWizard({ classes, lessons, rooms, currentYear, teacherId, existingEntries }: Props) {
-  const [selectedClass, setSelectedClass] = useState<Class | null>(null);
+  const [selectedClass, setSelectedClass] = useState<Class | null>(classes[0] ?? null);
   const [scheduledHere, setScheduledHere] = useState<ExistingEntry[]>(existingEntries);
   const [conflict, setConflict] = useState<ConflictState | null>(null);
   const [selectingSlot, setSelectingSlot] = useState<{ day: DayOfWeek; time: string } | null>(null);
@@ -62,7 +61,6 @@ export default function PlanningWizard({ classes, lessons, rooms, currentYear, t
   const [selectedLessonId, setSelectedLessonId] = useState("");
   const [selectedRoomId, setSelectedRoomId] = useState("");
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState<string[]>([]);
 
   const myLessons = lessons.filter((l) => l.teacher_id === teacherId);
   const hasClasses = classes.length > 0;
@@ -129,7 +127,6 @@ export default function PlanningWizard({ classes, lessons, rooms, currentYear, t
         lesson_id: selectedLessonId,
       };
       setScheduledHere((prev) => [...prev, newEntry]);
-      setSaved((prev) => [...prev, `${selectingSlot.time}-${selectingSlot.day}`]);
       setSelectLesson(false);
       setSelectingSlot(null);
     }
@@ -198,7 +195,7 @@ export default function PlanningWizard({ classes, lessons, rooms, currentYear, t
       <div className="text-center py-16 bg-white border border-gray-200 rounded-xl">
         <p className="text-4xl mb-3">🏫</p>
         <p className="text-lg font-semibold text-gray-700 mb-1">אין כיתות במערכת</p>
-        <p className="text-sm text-gray-500 mb-4">לפני שניתן לתכנן, יש להוסיף בתי ספר וכיתות.</p>
+        <p className="text-sm text-gray-500 mb-4">לפני שניתן לתכנן, יש להוסיף כיתות.</p>
         <Link href="/admin" className="inline-block bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700">
           עבור לניהול מערכת
         </Link>
@@ -221,43 +218,31 @@ export default function PlanningWizard({ classes, lessons, rooms, currentYear, t
         </div>
       )}
 
-      {/* בחירת כיתה — מקובצת לפי בית ספר */}
+      {/* בחירת כיתה */}
       <div className="mb-6">
-        <p className="text-sm font-medium text-gray-700 mb-3">בחר כיתה לתכנון:</p>
-        {Object.entries(
-          classes.reduce((acc, cls) => {
-            const school = (cls as any).school?.name ?? "ללא בית ספר";
-            if (!acc[school]) acc[school] = [];
-            acc[school].push(cls);
-            return acc;
-          }, {} as Record<string, Class[]>)
-        ).map(([schoolName, schoolClasses]) => (
-          <div key={schoolName} className="mb-4">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">{schoolName}</p>
-            <div className="flex flex-wrap gap-2">
-              {schoolClasses.map((cls) => (
-                <button
-                  key={cls.id}
-                  onClick={() => setSelectedClass(cls)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
-                    selectedClass?.id === cls.id
-                      ? "bg-blue-600 text-white border-blue-600"
-                      : "bg-white text-gray-700 border-gray-300 hover:border-blue-400"
-                  }`}
-                >
-                  {cls.name}
-                </button>
-              ))}
-            </div>
-          </div>
-        ))}
+        <p className="text-sm font-medium text-gray-700 mb-3">בחר כיתה:</p>
+        <div className="flex flex-wrap gap-2">
+          {classes.map((cls) => (
+            <button
+              key={cls.id}
+              onClick={() => setSelectedClass(cls)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                selectedClass?.id === cls.id
+                  ? "bg-blue-600 text-white border-blue-600"
+                  : "bg-white text-gray-700 border-gray-300 hover:border-blue-400"
+              }`}
+            >
+              {cls.name}
+            </button>
+          ))}
+        </div>
       </div>
 
       {selectedClass && (
         <>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-gray-800">
-              לוח שבועי — {classDisplayName(selectedClass)}
+              לוח שבועי — {selectedClass.name}
             </h2>
             <Link href="/schedule" className="text-sm text-blue-600 hover:underline">
               צפה במערכת המלאה
@@ -356,7 +341,7 @@ export default function PlanningWizard({ classes, lessons, rooms, currentYear, t
               </p>
             </div>
 
-            {selectedLessonId && (
+            {selectedLessonId && rooms.length > 0 && (
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-1">שריין חדר (אופציונלי)</label>
                 <select
@@ -366,7 +351,7 @@ export default function PlanningWizard({ classes, lessons, rooms, currentYear, t
                 >
                   <option value="">ללא שריון חדר</option>
                   {rooms.map((r) => (
-                    <option key={r.id} value={r.id}>{r.name}{r.capacity ? ` (${r.capacity})` : ""}</option>
+                    <option key={r.id} value={r.id}>{r.name}</option>
                   ))}
                 </select>
               </div>

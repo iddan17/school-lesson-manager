@@ -7,12 +7,6 @@ import {
   createRoomInline, updateRoomInline, deleteRoomInline,
 } from "@/app/actions";
 
-const PRESET_COLORS = [
-  "#ef4444", "#f97316", "#eab308", "#22c55e",
-  "#06b6d4", "#3b82f6", "#8b5cf6", "#ec4899",
-  "#64748b", "#14b8a6",
-];
-
 interface Props {
   subjects: Subject[];
   rooms: Room[];
@@ -98,7 +92,7 @@ export default function LessonForm({ subjects: init_s, rooms: init_r, lesson, ac
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
             <option value="">ללא העדפה</option>
             {rooms.map((r) => (
-              <option key={r.id} value={r.id}>{r.name}{r.capacity ? ` (${r.capacity})` : ""}</option>
+              <option key={r.id} value={r.id}>{r.name}</option>
             ))}
           </select>
         </div>
@@ -205,12 +199,10 @@ function SubjectManager({ subjects, setSubjects }: { subjects: Subject[]; setSub
                 <div className="space-y-2">
                   <input value={editName} onChange={(e) => setEditName(e.target.value)}
                     className="w-full border border-gray-300 rounded-lg px-2 py-1 text-sm" />
-                  <div className="flex gap-1.5 flex-wrap">
-                    {PRESET_COLORS.map((c) => (
-                      <button key={c} type="button" onClick={() => setEditColor(c)}
-                        className={`w-6 h-6 rounded-full border-2 transition-all ${editColor === c ? "border-gray-800 scale-110" : "border-transparent"}`}
-                        style={{ backgroundColor: c }} />
-                    ))}
+                  <div className="flex items-center gap-2">
+                    <input type="color" value={editColor} onChange={(e) => setEditColor(e.target.value)}
+                      className="w-9 h-9 rounded cursor-pointer border border-gray-300 p-0.5" />
+                    <span className="text-xs text-gray-500">בחר צבע</span>
                   </div>
                   <div className="flex gap-2">
                     <button type="button" onClick={handleUpdate} disabled={busy}
@@ -239,12 +231,10 @@ function SubjectManager({ subjects, setSubjects }: { subjects: Subject[]; setSub
             <div className="px-4 py-3 bg-blue-50 space-y-2">
               <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="שם הקטגוריה"
                 className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm" />
-              <div className="flex gap-1.5 flex-wrap">
-                {PRESET_COLORS.map((c) => (
-                  <button key={c} type="button" onClick={() => setNewColor(c)}
-                    className={`w-6 h-6 rounded-full border-2 transition-all ${newColor === c ? "border-gray-800 scale-110" : "border-transparent"}`}
-                    style={{ backgroundColor: c }} />
-                ))}
+              <div className="flex items-center gap-2">
+                <input type="color" value={newColor} onChange={(e) => setNewColor(e.target.value)}
+                  className="w-9 h-9 rounded cursor-pointer border border-gray-300 p-0.5" />
+                <span className="text-xs text-gray-500">בחר צבע</span>
               </div>
               <div className="flex gap-2">
                 <button type="button" onClick={handleAdd} disabled={busy || !newName.trim()}
@@ -274,33 +264,29 @@ function RoomManager({ rooms, setRooms }: { rooms: Room[]; setRooms: (fn: (p: Ro
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
-  const [editCap, setEditCap] = useState("");
   const [newName, setNewName] = useState("");
-  const [newCap, setNewCap] = useState("");
   const [showAdd, setShowAdd] = useState(false);
   const [busy, setBusy] = useState(false);
 
   async function handleAdd() {
     if (!newName.trim()) return;
     setBusy(true);
-    const fd = new FormData(); fd.set("name", newName.trim()); if (newCap) fd.set("capacity", newCap);
+    const fd = new FormData(); fd.set("name", newName.trim());
     const res = await createRoomInline(fd);
     setBusy(false);
     if ((res as any).room) {
       setRooms((p) => [...p, (res as any).room]);
-      setNewName(""); setNewCap(""); setShowAdd(false);
+      setNewName(""); setShowAdd(false);
     }
   }
 
   async function handleUpdate() {
     if (!editId || !editName.trim()) return;
     setBusy(true);
-    const fd = new FormData(); fd.set("name", editName.trim()); if (editCap) fd.set("capacity", editCap);
+    const fd = new FormData(); fd.set("name", editName.trim());
     await updateRoomInline(editId, fd);
     setBusy(false);
-    setRooms((p) => p.map((r) => r.id === editId
-      ? { ...r, name: editName, capacity: editCap ? parseInt(editCap) : null }
-      : r));
+    setRooms((p) => p.map((r) => r.id === editId ? { ...r, name: editName } : r));
     setEditId(null);
   }
 
@@ -327,8 +313,6 @@ function RoomManager({ rooms, setRooms }: { rooms: Room[]; setRooms: (fn: (p: Ro
                 <div className="space-y-2">
                   <input value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="שם החדר"
                     className="w-full border border-gray-300 rounded-lg px-2 py-1 text-sm" />
-                  <input type="number" value={editCap} onChange={(e) => setEditCap(e.target.value)} placeholder="קיבולת" min={1}
-                    className="w-full border border-gray-300 rounded-lg px-2 py-1 text-sm" />
                   <div className="flex gap-2">
                     <button type="button" onClick={handleUpdate} disabled={busy}
                       className="bg-green-600 text-white px-3 py-1 rounded text-xs disabled:opacity-50">שמור</button>
@@ -338,9 +322,9 @@ function RoomManager({ rooms, setRooms }: { rooms: Room[]; setRooms: (fn: (p: Ro
                 </div>
               ) : (
                 <div className="flex items-center justify-between">
-                  <span className="text-sm">{r.name}{r.capacity ? ` (${r.capacity})` : ""}</span>
+                  <span className="text-sm">{r.name}</span>
                   <div className="flex gap-3">
-                    <button type="button" onClick={() => { setEditId(r.id); setEditName(r.name); setEditCap(r.capacity ? String(r.capacity) : ""); }}
+                    <button type="button" onClick={() => { setEditId(r.id); setEditName(r.name); }}
                       className="text-xs text-blue-500 hover:underline">ערוך</button>
                     <button type="button" onClick={() => handleDelete(r.id)} disabled={busy}
                       className="text-xs text-red-400 hover:text-red-600 disabled:opacity-50">מחק</button>
@@ -352,8 +336,6 @@ function RoomManager({ rooms, setRooms }: { rooms: Room[]; setRooms: (fn: (p: Ro
           {showAdd ? (
             <div className="px-4 py-3 bg-green-50 space-y-2">
               <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="שם החדר (מעבדה, אולם...)"
-                className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm" />
-              <input type="number" value={newCap} onChange={(e) => setNewCap(e.target.value)} placeholder="קיבולת (אופציונלי)" min={1}
                 className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm" />
               <div className="flex gap-2">
                 <button type="button" onClick={handleAdd} disabled={busy || !newName.trim()}
