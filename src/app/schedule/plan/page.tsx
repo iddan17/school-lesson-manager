@@ -41,6 +41,7 @@ export default async function PlanPage() {
           currentYear={currentYear}
           teacherId={user!.id}
           existingEntries={myScheduledEntries as any}
+          isAdmin={profile?.role === "admin"}
         />
       </main>
     </>

@@ -22,6 +22,7 @@ export default function LessonForm({ subjects: init_s, rooms: init_r, lesson, ac
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>(lesson?.subjects?.map((s) => s.id) ?? []);
   const [hasMaterials, setHasMaterials] = useState(lesson?.has_materials ?? false);
   const [hasEquipment, setHasEquipment] = useState(lesson?.has_equipment ?? false);
+  const [isPublic, setIsPublic] = useState(lesson?.is_public ?? false);
 
   function toggleSubject(id: string) {
     setSelectedSubjects((prev) => prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]);
@@ -47,6 +48,7 @@ export default function LessonForm({ subjects: init_s, rooms: init_r, lesson, ac
         ))}
         <input type="hidden" name="has_materials" value={hasMaterials.toString()} />
         <input type="hidden" name="has_equipment" value={hasEquipment.toString()} />
+        <input type="hidden" name="is_public" value={isPublic.toString()} />
 
         {/* כותרת */}
         <div>
@@ -131,6 +133,29 @@ export default function LessonForm({ subjects: init_s, rooms: init_r, lesson, ac
             placeholder="הערות נוספות..."
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
         </div>
+
+        {/* נראות — רק אדמין יכול לסמן ציבורי */}
+        {isAdmin ? (
+          <div className="flex items-center gap-3 p-3 rounded-xl border border-gray-200 bg-gray-50">
+            <button
+              type="button"
+              onClick={() => setIsPublic((v) => !v)}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${isPublic ? "bg-green-500" : "bg-gray-300"}`}
+            >
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${isPublic ? "translate-x-6" : "translate-x-1"}`} />
+            </button>
+            <div>
+              <p className="text-sm font-medium text-gray-800">
+                {isPublic ? "שיעור ציבורי" : "שיעור פרטי"}
+              </p>
+              <p className="text-xs text-gray-500">
+                {isPublic ? "גלוי לכל המורים בבנק השיעורים" : "גלוי רק לך"}
+              </p>
+            </div>
+          </div>
+        ) : (
+          <p className="text-xs text-gray-400">שיעורים שתיצור יהיו פרטיים — גלויים רק לך</p>
+        )}
 
         <button type="submit"
           className="bg-blue-600 text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors">

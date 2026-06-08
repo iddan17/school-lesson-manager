@@ -121,12 +121,16 @@ export async function createLesson(formData: FormData) {
 
   const subjectIds = formData.getAll("subject_ids") as string[];
 
+  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+  const isAdmin = profile?.role === "admin";
+
   const { data: lesson, error } = await supabase
     .from("lessons")
     .insert({
       teacher_id: user.id,
       title: formData.get("title") as string,
       description: (formData.get("description") as string) || null,
+      is_public: isAdmin && formData.get("is_public") === "true",
       has_materials: formData.get("has_materials") === "true",
       has_equipment: formData.get("has_equipment") === "true",
       materials_notes: (formData.get("materials_notes") as string) || null,
@@ -150,6 +154,10 @@ export async function createLesson(formData: FormData) {
 
 export async function updateLesson(id: string, formData: FormData) {
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user!.id).single();
+  const isAdmin = profile?.role === "admin";
+
   const subjectIds = formData.getAll("subject_ids") as string[];
 
   const { error } = await supabase
@@ -157,6 +165,7 @@ export async function updateLesson(id: string, formData: FormData) {
     .update({
       title: formData.get("title") as string,
       description: (formData.get("description") as string) || null,
+      is_public: isAdmin && formData.get("is_public") === "true",
       has_materials: formData.get("has_materials") === "true",
       has_equipment: formData.get("has_equipment") === "true",
       materials_notes: (formData.get("materials_notes") as string) || null,

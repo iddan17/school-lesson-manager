@@ -34,6 +34,7 @@ interface Props {
   currentYear: number;
   teacherId: string;
   existingEntries: ExistingEntry[];
+  isAdmin?: boolean;
 }
 
 interface ConflictState {
@@ -52,7 +53,7 @@ interface ConflictState {
 
 const DAYS: DayOfWeek[] = [0, 1, 2, 3, 4];
 
-export default function PlanningWizard({ classes, lessons, rooms, currentYear, teacherId, existingEntries }: Props) {
+export default function PlanningWizard({ classes, lessons, rooms, currentYear, teacherId, existingEntries, isAdmin }: Props) {
   const [selectedClass, setSelectedClass] = useState<Class | null>(classes[0] ?? null);
   const [scheduledHere, setScheduledHere] = useState<ExistingEntry[]>(existingEntries);
   const [conflict, setConflict] = useState<ConflictState | null>(null);
@@ -62,7 +63,14 @@ export default function PlanningWizard({ classes, lessons, rooms, currentYear, t
   const [selectedRoomId, setSelectedRoomId] = useState("");
   const [saving, setSaving] = useState(false);
 
+  // myLessons = lessons this user owns (for the "no lessons" warning)
+  // schedulableLessons = lessons this user can schedule:
+  //   - admin: all lessons they own (any is_public value)
+  //   - teacher: only their own private lessons
   const myLessons = lessons.filter((l) => l.teacher_id === teacherId);
+  const schedulableLessons = isAdmin
+    ? lessons
+    : myLessons.filter((l) => !(l as any).is_public);
   const hasClasses = classes.length > 0;
   const hasMyLessons = myLessons.length > 0;
 
@@ -329,8 +337,10 @@ export default function PlanningWizard({ classes, lessons, rooms, currentYear, t
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
               >
                 <option value="">-- בחר שיעור --</option>
-                {myLessons.map((l) => (
-                  <option key={l.id} value={l.id}>{l.title}</option>
+                {schedulableLessons.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.title}{(l as any).is_public ? " (ציבורי)" : ""}
+                  </option>
                 ))}
               </select>
               <p className="text-xs text-gray-400 mt-1">

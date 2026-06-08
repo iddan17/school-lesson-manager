@@ -66,6 +66,7 @@ export interface Lesson {
   teacher_id: string;
   title: string;
   description: string | null;
+  is_public: boolean;
   has_materials: boolean;
   has_equipment: boolean;
   materials_notes: string | null;
