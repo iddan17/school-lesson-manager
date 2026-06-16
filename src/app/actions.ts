@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import type { DayOfWeek } from "@/lib/types";
 
@@ -149,6 +150,7 @@ export async function createLesson(formData: FormData) {
     );
   }
 
+  revalidatePath("/lessons");
   redirect("/lessons");
 }
 
@@ -184,12 +186,15 @@ export async function updateLesson(id: string, formData: FormData) {
     );
   }
 
+  revalidatePath("/lessons");
+  revalidatePath(`/lessons/${id}`);
   redirect("/lessons");
 }
 
 export async function deleteLesson(id: string) {
   const supabase = await createClient();
   await supabase.from("lessons").delete().eq("id", id);
+  revalidatePath("/lessons");
   redirect("/lessons");
 }
 
