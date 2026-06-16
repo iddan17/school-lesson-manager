@@ -25,7 +25,12 @@ export async function proxy(request: NextRequest) {
     }
   );
 
-  const { data: { user } } = await supabase.auth.getUser();
+  // Read the session from cookies locally instead of calling getUser() (a network
+  // round-trip) on every request. getSession only hits the network when the access
+  // token has actually expired (to refresh it), so most navigations pay 0ms here.
+  // Every data query is still verified server-side by RLS, so the gate stays safe.
+  const { data: { session } } = await supabase.auth.getSession();
+  const user = session?.user ?? null;
 
   const isAuthPage = request.nextUrl.pathname.startsWith("/auth");
 
