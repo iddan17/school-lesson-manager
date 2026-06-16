@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser, getProfile } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import {
@@ -11,16 +12,16 @@ import { GRADE_NAMES } from "@/lib/types";
 
 export default async function AdminPage() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  const { data: profile } = await supabase.from("profiles").select("*").eq("id", user!.id).single();
-  if (profile?.role !== "admin") redirect("/dashboard");
 
-  const [{ data: schools }, { data: classes }, { data: rooms }, { data: users }] = await Promise.all([
+  const [user, profile, { data: schools }, { data: classes }, { data: rooms }, { data: users }] = await Promise.all([
+    getCurrentUser(),
+    getProfile(),
     supabase.from("schools").select("*").order("name"),
     supabase.from("classes").select("*, school:schools(name)").order("school_id").order("grade"),
     supabase.from("rooms").select("*").order("name"),
     supabase.from("profiles").select("*").order("full_name"),
   ]);
+  if (profile?.role !== "admin") redirect("/dashboard");
 
   return (
     <>

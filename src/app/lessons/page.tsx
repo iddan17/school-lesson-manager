@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser, getProfile } from "@/lib/auth";
 import Navbar from "@/components/Navbar";
 import SubjectBadge from "@/components/SubjectBadge";
 import FilterSelect from "@/components/FilterSelect";
@@ -12,10 +13,9 @@ export default async function LessonsPage({
   searchParams: Promise<{ subject?: string; teacher?: string; needs?: string; visibility?: string }>;
 }) {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
   const params = await searchParams;
 
-  const [{ data: lessons }, { data: subjects }, { data: teachers }, { data: profile }] = await Promise.all([
+  const [{ data: lessons }, { data: subjects }, { data: teachers }, user, profile] = await Promise.all([
     supabase
       .from("lessons")
       .select(`
@@ -27,7 +27,8 @@ export default async function LessonsPage({
       .order("created_at", { ascending: false }),
     supabase.from("subjects").select("*").order("name"),
     supabase.from("profiles").select("id, full_name").order("full_name"),
-    supabase.from("profiles").select("role").eq("id", user!.id).single(),
+    getCurrentUser(),
+    getProfile(),
   ]);
 
   const isAdmin = profile?.role === "admin";
@@ -119,15 +120,15 @@ export default async function LessonsPage({
                       </p>
                     </div>
                     {canEdit && (
-                      <div className="flex gap-2 flex-shrink-0">
+                      <div className="flex items-center gap-2 flex-shrink-0">
                         <Link
                           href={`/lessons/${lesson.id}`}
-                          className="text-xs text-blue-600 hover:underline"
+                          className="text-xs text-blue-600 hover:underline leading-none"
                         >
                           ערוך
                         </Link>
-                        <form action={deleteLesson.bind(null, lesson.id)}>
-                          <button type="submit" className="text-xs text-red-500 hover:underline">מחק</button>
+                        <form action={deleteLesson.bind(null, lesson.id)} className="flex items-center">
+                          <button type="submit" className="text-xs text-red-500 hover:underline leading-none">מחק</button>
                         </form>
                       </div>
                     )}

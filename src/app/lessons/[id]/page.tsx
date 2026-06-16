@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser, getProfile } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import LessonForm from "@/components/LessonForm";
@@ -9,14 +10,16 @@ import type { Subject } from "@/lib/types";
 export default async function EditLessonPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  const { data: profile } = await supabase.from("profiles").select("*").eq("id", user!.id).single();
 
-  const { data: lesson } = await supabase
-    .from("lessons")
-    .select(`*, subjects:lesson_subjects(subject:subjects(*)), preferred_room:rooms(*)`)
-    .eq("id", id)
-    .single();
+  const [user, profile, { data: lesson }] = await Promise.all([
+    getCurrentUser(),
+    getProfile(),
+    supabase
+      .from("lessons")
+      .select(`*, subjects:lesson_subjects(subject:subjects(*)), preferred_room:rooms(*)`)
+      .eq("id", id)
+      .single(),
+  ]);
 
   if (!lesson) redirect("/lessons");
 

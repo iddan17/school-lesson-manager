@@ -1,19 +1,19 @@
 import { createClient } from "@/lib/supabase/server";
+import { getProfile } from "@/lib/auth";
 import Navbar from "@/components/Navbar";
 import Link from "next/link";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
 
   const [
     { count: lessonsCount },
     { count: scheduledCount },
-    { data: profile },
+    profile,
   ] = await Promise.all([
     supabase.from("lessons").select("*", { count: "exact", head: true }),
     supabase.from("schedule_entries").select("*", { count: "exact", head: true }).eq("school_year", new Date().getFullYear()),
-    supabase.from("profiles").select("*").eq("id", user!.id).single(),
+    getProfile(),
   ]);
 
   const currentYear = new Date().getFullYear();

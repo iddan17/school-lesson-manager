@@ -1,19 +1,20 @@
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser, getProfile } from "@/lib/auth";
 import Navbar from "@/components/Navbar";
 import PlanningWizard from "@/components/PlanningWizard";
 
 export default async function PlanPage() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
 
-  const [{ data: classes }, { data: lessons }, { data: rooms }, { data: profile }] = await Promise.all([
+  const [{ data: classes }, { data: lessons }, { data: rooms }, user, profile] = await Promise.all([
     supabase.from("classes").select("*").order("grade"),
     supabase
       .from("lessons")
       .select(`*, subjects:lesson_subjects(subject:subjects(*)), teacher:profiles(full_name)`)
       .order("title"),
     supabase.from("rooms").select("*").order("name"),
-    supabase.from("profiles").select("*").eq("id", user!.id).single(),
+    getCurrentUser(),
+    getProfile(),
   ]);
 
   const currentYear = new Date().getFullYear();

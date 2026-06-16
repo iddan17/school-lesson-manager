@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { getProfile } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import { createSubject, deleteSubject } from "@/app/actions";
@@ -11,11 +12,11 @@ const PRESET_COLORS = [
 
 export default async function SubjectsPage() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  const { data: profile } = await supabase.from("profiles").select("*").eq("id", user!.id).single();
+  const [profile, { data: subjects }] = await Promise.all([
+    getProfile(),
+    supabase.from("subjects").select("*").order("name"),
+  ]);
   if (profile?.role !== "admin") redirect("/dashboard");
-
-  const { data: subjects } = await supabase.from("subjects").select("*").order("name");
 
   return (
     <>
