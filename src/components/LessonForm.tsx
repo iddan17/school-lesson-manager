@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useActionState, useState } from "react";
 import type { Subject, Room, Lesson } from "@/lib/types";
 import {
   createSubjectInline, updateSubjectInline, deleteSubjectInline,
@@ -24,6 +24,14 @@ export default function LessonForm({ subjects: init_s, rooms: init_r, lesson, ac
   const [hasEquipment, setHasEquipment] = useState(lesson?.has_equipment ?? false);
   const [isPublic, setIsPublic] = useState(lesson?.is_public ?? false);
 
+  // Wrap the server action so a returned error is shown instead of silently
+  // bouncing back to the form. On success the action redirects, so state stays null.
+  const [formState, formAction, isPending] = useActionState(
+    async (_prev: { error?: string } | null, formData: FormData) =>
+      (await action(formData)) ?? null,
+    null
+  );
+
   function toggleSubject(id: string) {
     setSelectedSubjects((prev) => prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]);
   }
@@ -40,7 +48,7 @@ export default function LessonForm({ subjects: init_s, rooms: init_r, lesson, ac
       )}
 
       {/* ── Main form — uses form action (Next.js 16 official pattern) ── */}
-      <form action={action} className="space-y-5">
+      <form action={formAction} className="space-y-5">
 
         {/* Hidden inputs for controlled state — read by server actions */}
         {selectedSubjects.map((id) => (
@@ -139,8 +147,9 @@ export default function LessonForm({ subjects: init_s, rooms: init_r, lesson, ac
           <div className="flex items-center gap-3 p-3 rounded-xl border border-gray-200 bg-gray-50">
             <button
               type="button"
+              dir="ltr"
               onClick={() => setIsPublic((v) => !v)}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${isPublic ? "bg-green-500" : "bg-gray-300"}`}
+              className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none ${isPublic ? "bg-green-500" : "bg-gray-300"}`}
             >
               <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${isPublic ? "translate-x-6" : "translate-x-1"}`} />
             </button>
@@ -157,9 +166,15 @@ export default function LessonForm({ subjects: init_s, rooms: init_r, lesson, ac
           <p className="text-xs text-gray-400">שיעורים שתיצור יהיו פרטיים — גלויים רק לך</p>
         )}
 
-        <button type="submit"
-          className="bg-blue-600 text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors">
-          {submitLabel}
+        {formState?.error && (
+          <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+            שמירה נכשלה: {formState.error}
+          </p>
+        )}
+
+        <button type="submit" disabled={isPending}
+          className="bg-blue-600 text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50">
+          {isPending ? "שומר..." : submitLabel}
         </button>
       </form>
     </div>
