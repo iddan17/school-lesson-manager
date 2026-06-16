@@ -109,6 +109,47 @@ export interface AlternativeSlot {
   end_time: string;
 }
 
+export interface TeachingSlot {
+  id: string;
+  teacher_id: string;
+  class_id: string;
+  school_year: number;
+  day_of_week: DayOfWeek;
+  start_time: string;
+  end_time: string;
+  room_id: string | null;
+  created_at: string;
+  // joined
+  teacher?: Profile;
+  class?: Class;
+  room?: Room;
+}
+
+export interface SlotSession {
+  id: string;
+  slot_id: string;
+  date: string; // yyyy-mm-dd
+  lesson_id: string | null;
+  room_id: string | null;
+  created_at: string;
+  // joined
+  lesson?: Lesson;
+}
+
+export interface SchoolYearConfig {
+  school_year: number;
+  start_date: string;
+  end_date: string;
+}
+
+export interface CalendarExceptionRow {
+  id: string;
+  school_year: number;
+  date: string; // yyyy-mm-dd
+  closed: boolean;
+  reason: string | null;
+}
+
 // Supabase Database type stubs for createClient generics
 export type Database = {
   public: {
@@ -120,6 +161,10 @@ export type Database = {
       lessons: { Row: Lesson; Insert: Omit<Lesson, "id" | "created_at" | "teacher" | "subjects" | "preferred_room">; Update: Partial<Lesson> };
       lesson_subjects: { Row: { lesson_id: string; subject_id: string }; Insert: { lesson_id: string; subject_id: string }; Update: never };
       schedule_entries: { Row: ScheduleEntry; Insert: Omit<ScheduleEntry, "id" | "created_at" | "lesson" | "class" | "room">; Update: Partial<ScheduleEntry> };
+      teaching_slots: { Row: TeachingSlot; Insert: Omit<TeachingSlot, "id" | "created_at" | "teacher" | "class" | "room">; Update: Partial<TeachingSlot> };
+      slot_sessions: { Row: SlotSession; Insert: Omit<SlotSession, "id" | "created_at" | "lesson">; Update: Partial<SlotSession> };
+      school_year_config: { Row: SchoolYearConfig; Insert: SchoolYearConfig; Update: Partial<SchoolYearConfig> };
+      calendar_exceptions: { Row: CalendarExceptionRow; Insert: Omit<CalendarExceptionRow, "id">; Update: Partial<CalendarExceptionRow> };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;

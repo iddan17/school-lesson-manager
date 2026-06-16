@@ -1,0 +1,307 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import Link from "next/link";
+import type {
+  Class, Room, DayOfWeek, Subject, TeachingSlot, SlotSession, SchoolYearConfig, CalendarExceptionRow,
+} from "@/lib/types";
+import { DAY_NAMES, TIME_SLOTS } from "@/lib/types";
+import { getYearRange, getNoSchoolDates, getSlotDates, formatDateHe, toYMD } from "@/lib/calendar";
+import {
+  createTeachingSlot, deleteTeachingSlot, assignSessionLesson, clearSession,
+} from "@/app/actions";
+
+interface LessonOption {
+  id: string;
+  title: string;
+  is_public?: boolean;
+  preferred_room_id: string | null;
+  subjects?: { subject: Subject }[];
+}
+
+interface Props {
+  teacherId: string;
+  schoolYear: number;
+  classes: Class[];
+  rooms: Room[];
+  lessons: LessonOption[];
+  slots: TeachingSlot[];
+  sessions: SlotSession[];
+  yearConfig: SchoolYearConfig | null;
+  exceptions: CalendarExceptionRow[];
+}
+
+const DAYS: DayOfWeek[] = [0, 1, 2, 3, 4];
+
+export default function AnnualPlanner({
+  teacherId, schoolYear, classes, rooms, lessons, slots: initSlots, sessions: initSessions, yearConfig, exceptions,
+}: Props) {
+  const [slots, setSlots] = useState<TeachingSlot[]>(initSlots);
+  const [sessions, setSessions] = useState<SlotSession[]>(initSessions);
+  const [selectedSlotId, setSelectedSlotId] = useState<string | null>(initSlots[0]?.id ?? null);
+  const [showAddSlot, setShowAddSlot] = useState(initSlots.length === 0);
+  const [assigning, setAssigning] = useState<{ date: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const classMap = useMemo(() => Object.fromEntries(classes.map((c) => [c.id, c])), [classes]);
+  const lessonMap = useMemo(() => Object.fromEntries(lessons.map((l) => [l.id, l])), [lessons]);
+  const sessionByKey = useMemo(() => {
+    const m = new Map<string, SlotSession>();
+    for (const s of sessions) m.set(`${s.slot_id}|${s.date}`, s);
+    return m;
+  }, [sessions]);
+
+  const range = useMemo(() => getYearRange(schoolYear, yearConfig), [schoolYear, yearConfig]);
+  const noSchool = useMemo(() => getNoSchoolDates(range.start, range.end), [range]);
+  const exForCalc = useMemo(() => exceptions.map((e) => ({ date: e.date, closed: e.closed })), [exceptions]);
+
+  const selectedSlot = slots.find((s) => s.id === selectedSlotId) ?? null;
+  const dates = useMemo(() => {
+    if (!selectedSlot) return [];
+    return getSlotDates(selectedSlot.day_of_week, range, noSchool, exForCalc);
+  }, [selectedSlot, range, noSchool, exForCalc]);
+
+  if (classes.length === 0) {
+    return (
+      <div className="text-center py-16 bg-white border border-gray-200 rounded-xl">
+        <p className="text-4xl mb-3">🏫</p>
+        <p className="text-lg font-semibold text-gray-700 mb-1">אין כיתות במערכת</p>
+        <Link href="/admin" className="inline-block mt-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700">
+          עבור לניהול מערכת
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-8">
+      {/* ── Teaching slots ── */}
+      <section>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-lg font-semibold text-gray-800">שיבוצים קבועים</h2>
+          <button onClick={() => setShowAddSlot((v) => !v)}
+            className="text-sm text-blue-600 hover:underline">
+            {showAddSlot ? "סגור" : "+ שיבוץ חדש"}
+          </button>
+        </div>
+
+        {showAddSlot && (
+          <AddSlotForm
+            classes={classes} rooms={rooms} schoolYear={schoolYear} teacherId={teacherId} busy={busy}
+            onCreate={async (fd) => {
+              setBusy(true);
+              const res = await createTeachingSlot(fd);
+              setBusy(false);
+              if ((res as any).slot) {
+                setSlots((p) => [...p, (res as any).slot]);
+                setSelectedSlotId((res as any).slot.id);
+                setShowAddSlot(false);
+                return null;
+              }
+              return (res as any).error ?? "שגיאה";
+            }}
+          />
+        )}
+
+        {slots.length === 0 ? (
+          <p className="text-sm text-gray-400 mt-2">אין שיבוצים עדיין. הוסף שיבוץ קבוע (כיתה, יום ושעה) כדי להתחיל.</p>
+        ) : (
+          <div className="flex flex-wrap gap-2 mt-3">
+            {slots.map((slot) => {
+              const cls = classMap[slot.class_id];
+              const active = slot.id === selectedSlotId;
+              return (
+                <div key={slot.id}
+                  className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${
+                    active ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-700 border-gray-300 hover:border-blue-400"
+                  }`}>
+                  <button onClick={() => setSelectedSlotId(slot.id)} className="font-medium">
+                    {cls?.name ?? "כיתה"} · {DAY_NAMES[slot.day_of_week]} · {slot.start_time.slice(0, 5)}
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (!confirm("למחוק שיבוץ זה? כל השיעורים ששויכו אליו יימחקו.")) return;
+                      setBusy(true);
+                      await deleteTeachingSlot(slot.id);
+                      setBusy(false);
+                      setSlots((p) => p.filter((s) => s.id !== slot.id));
+                      setSessions((p) => p.filter((s) => s.slot_id !== slot.id));
+                      if (selectedSlotId === slot.id) setSelectedSlotId(null);
+                    }}
+                    className={`text-xs ${active ? "text-blue-100 hover:text-white" : "text-red-400 hover:text-red-600"}`}
+                    title="מחק שיבוץ"
+                  >✕</button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      {/* ── Sessions for the selected slot ── */}
+      {selectedSlot && (
+        <section>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-lg font-semibold text-gray-800">
+              שיעורים — {classMap[selectedSlot.class_id]?.name} · {DAY_NAMES[selectedSlot.day_of_week]} {selectedSlot.start_time.slice(0, 5)}–{selectedSlot.end_time.slice(0, 5)}
+            </h2>
+            <span className="text-xs text-gray-400">{dates.length} מפגשים (ללא חגים)</span>
+          </div>
+
+          {lessons.length === 0 && (
+            <div className="mb-3 bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-800">
+              אין לך שיעורים בבנק.{" "}
+              <Link href="/lessons/new" className="font-medium underline">צור שיעור חדש</Link>
+            </div>
+          )}
+
+          <div className="bg-white border border-gray-200 rounded-xl divide-y divide-gray-100">
+            {dates.map((d) => {
+              const ymd = toYMD(d);
+              const session = sessionByKey.get(`${selectedSlot.id}|${ymd}`);
+              const lesson: any = session?.lesson ?? (session?.lesson_id ? lessonMap[session.lesson_id] : null);
+              const color = lesson?.subjects?.[0]?.subject?.color ?? "#6366f1";
+              return (
+                <div key={ymd} className="flex items-center justify-between gap-3 px-4 py-2.5">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="text-xs text-gray-400 w-24 shrink-0">{DAY_NAMES[selectedSlot.day_of_week]} {formatDateHe(d)}</span>
+                    {lesson ? (
+                      <span className="rounded-md px-2 py-1 text-sm border-r-2 truncate"
+                        style={{ borderRightColor: color, backgroundColor: `${color}18` }}>
+                        {lesson.title}
+                      </span>
+                    ) : (
+                      <span className="text-sm text-gray-300">— ללא שיעור —</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <button onClick={() => setAssigning({ date: ymd })}
+                      className="text-xs text-blue-600 hover:underline">
+                      {lesson ? "החלף" : "שייך שיעור"}
+                    </button>
+                    {session && (
+                      <button onClick={async () => {
+                        setBusy(true);
+                        await clearSession(selectedSlot.id, ymd);
+                        setBusy(false);
+                        setSessions((p) => p.filter((s) => !(s.slot_id === selectedSlot.id && s.date === ymd)));
+                      }} className="text-xs text-red-400 hover:text-red-600">נקה</button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+            {dates.length === 0 && (
+              <p className="px-4 py-6 text-center text-sm text-gray-400">אין מפגשים בטווח השנה.</p>
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* ── Assign-lesson modal ── */}
+      {assigning && selectedSlot && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-40 p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
+            <h3 className="text-lg font-bold text-gray-900 mb-1">שיוך שיעור</h3>
+            <p className="text-sm text-gray-500 mb-4">
+              {classMap[selectedSlot.class_id]?.name} · {assigning.date.split("-").reverse().join("/")}
+            </p>
+            <select id="assign-lesson" defaultValue=""
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-4">
+              <option value="">-- בחר שיעור --</option>
+              {lessons.map((l) => (
+                <option key={l.id} value={l.id}>{l.title}{l.is_public ? " (ציבורי)" : ""}</option>
+              ))}
+            </select>
+            <div className="flex gap-2">
+              <button disabled={busy}
+                onClick={async () => {
+                  const sel = (document.getElementById("assign-lesson") as HTMLSelectElement).value;
+                  if (!sel) return;
+                  setBusy(true);
+                  const res = await assignSessionLesson(selectedSlot.id, assigning.date, sel);
+                  setBusy(false);
+                  if (!(res as any).error) {
+                    setSessions((p) => {
+                      const rest = p.filter((s) => !(s.slot_id === selectedSlot.id && s.date === assigning.date));
+                      return [...rest, { id: crypto.randomUUID(), slot_id: selectedSlot.id, date: assigning.date, lesson_id: sel, room_id: null, created_at: "" }];
+                    });
+                    setAssigning(null);
+                  }
+                }}
+                className="flex-1 bg-blue-600 text-white rounded-lg py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+                {busy ? "שומר..." : "שמור"}
+              </button>
+              <button onClick={() => setAssigning(null)}
+                className="px-4 py-2 text-gray-600 rounded-lg text-sm hover:bg-gray-100">ביטול</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AddSlotForm({
+  classes, rooms, schoolYear, teacherId, busy, onCreate,
+}: {
+  classes: Class[]; rooms: Room[]; schoolYear: number; teacherId: string; busy: boolean;
+  onCreate: (fd: FormData) => Promise<string | null>;
+}) {
+  const [error, setError] = useState<string | null>(null);
+  const [start, setStart] = useState(TIME_SLOTS[0]);
+  const [end, setEnd] = useState(TIME_SLOTS[1]);
+
+  return (
+    <form
+      action={async (fd) => {
+        fd.set("school_year", String(schoolYear));
+        fd.set("teacher_id", teacherId);
+        const err = await onCreate(fd);
+        setError(err);
+      }}
+      className="bg-gray-50 border border-gray-200 rounded-xl p-4 grid gap-3 sm:grid-cols-2"
+    >
+      <label className="text-sm">
+        <span className="block text-gray-600 mb-1">כיתה</span>
+        <select name="class_id" required className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm">
+          {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+      </label>
+      <label className="text-sm">
+        <span className="block text-gray-600 mb-1">יום</span>
+        <select name="day_of_week" required className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm">
+          {DAYS.map((d) => <option key={d} value={d}>{DAY_NAMES[d]}</option>)}
+        </select>
+      </label>
+      <label className="text-sm">
+        <span className="block text-gray-600 mb-1">משעה</span>
+        <select name="start_time" value={start} onChange={(e) => setStart(e.target.value)}
+          className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm">
+          {TIME_SLOTS.map((t) => <option key={t} value={t}>{t}</option>)}
+        </select>
+      </label>
+      <label className="text-sm">
+        <span className="block text-gray-600 mb-1">עד שעה</span>
+        <select name="end_time" value={end} onChange={(e) => setEnd(e.target.value)}
+          className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm">
+          {TIME_SLOTS.map((t) => <option key={t} value={t}>{t}</option>)}
+        </select>
+      </label>
+      <label className="text-sm sm:col-span-2">
+        <span className="block text-gray-600 mb-1">חדר (אופציונלי)</span>
+        <select name="room_id" className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm">
+          <option value="">ללא חדר קבוע</option>
+          {rooms.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+        </select>
+      </label>
+      {error && <p className="sm:col-span-2 text-sm text-red-600">{error}</p>}
+      <div className="sm:col-span-2">
+        <button type="submit" disabled={busy}
+          className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+          {busy ? "מוסיף..." : "הוסף שיבוץ"}
+        </button>
+      </div>
+    </form>
+  );
+}

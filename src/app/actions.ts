@@ -327,3 +327,109 @@ export async function updateUserRole(userId: string, role: "teacher" | "admin") 
   await supabase.from("profiles").update({ role }).eq("id", userId);
   redirect("/admin");
 }
+
+// ===== ANNUAL PLANNING: teaching slots + per-date sessions =====
+
+export async function createTeachingSlot(formData: FormData) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "לא מחובר" };
+
+  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+  const isAdmin = profile?.role === "admin";
+
+  const formTeacher = formData.get("teacher_id") as string | null;
+  const teacher_id = isAdmin && formTeacher ? formTeacher : user.id;
+
+  const { data, error } = await supabase.from("teaching_slots").insert({
+    teacher_id,
+    class_id: formData.get("class_id") as string,
+    school_year: parseInt(formData.get("school_year") as string),
+    day_of_week: parseInt(formData.get("day_of_week") as string),
+    start_time: formData.get("start_time") as string,
+    end_time: formData.get("end_time") as string,
+    room_id: (formData.get("room_id") as string) || null,
+  }).select().single();
+  if (error) return { error: error.message };
+  revalidatePath("/schedule/plan");
+  revalidatePath("/schedule");
+  return { slot: data };
+}
+
+export async function deleteTeachingSlot(id: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("teaching_slots").delete().eq("id", id);
+  if (error) return { error: error.message };
+  revalidatePath("/schedule/plan");
+  revalidatePath("/schedule");
+  return { success: true };
+}
+
+export async function assignSessionLesson(
+  slotId: string,
+  date: string,
+  lessonId: string,
+  roomId?: string | null
+) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("slot_sessions")
+    .upsert(
+      { slot_id: slotId, date, lesson_id: lessonId, room_id: roomId ?? null },
+      { onConflict: "slot_id,date" }
+    );
+  if (error) return { error: error.message };
+  revalidatePath("/schedule/plan");
+  return { success: true };
+}
+
+export async function clearSession(slotId: string, date: string) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("slot_sessions")
+    .delete()
+    .eq("slot_id", slotId)
+    .eq("date", date);
+  if (error) return { error: error.message };
+  revalidatePath("/schedule/plan");
+  return { success: true };
+}
+
+export async function setSchoolYearConfig(formData: FormData) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("school_year_config").upsert(
+    {
+      school_year: parseInt(formData.get("school_year") as string),
+      start_date: formData.get("start_date") as string,
+      end_date: formData.get("end_date") as string,
+    },
+    { onConflict: "school_year" }
+  );
+  if (error) return { error: error.message };
+  revalidatePath("/schedule/plan");
+  return { success: true };
+}
+
+export async function addCalendarException(formData: FormData) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("calendar_exceptions").upsert(
+    {
+      school_year: parseInt(formData.get("school_year") as string),
+      date: formData.get("date") as string,
+      closed: formData.get("closed") === "true",
+      reason: (formData.get("reason") as string) || null,
+    },
+    { onConflict: "school_year,date" }
+  );
+  if (error) return { error: error.message };
+  revalidatePath("/schedule/plan");
+  return { success: true };
+}
+
+export async function removeCalendarException(id: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("calendar_exceptions").delete().eq("id", id);
+  if (error) return { error: error.message };
+  revalidatePath("/schedule/plan");
+  return { success: true };
+}
