@@ -6,7 +6,7 @@ import type {
   Class, Room, DayOfWeek, Subject, TeachingSlot, SlotSession, SchoolYearConfig, CalendarExceptionRow,
 } from "@/lib/types";
 import { DAY_NAMES, TIME_SLOTS } from "@/lib/types";
-import { getYearRange, getNoSchoolDates, getSlotDates, formatDateHe, toYMD } from "@/lib/calendar";
+import { getYearRange, getNoSchoolMap, getSlotSchedule, formatDateHe } from "@/lib/calendar";
 import {
   createTeachingSlot, deleteTeachingSlot, assignSessionLesson, clearSession,
 } from "@/app/actions";
@@ -19,6 +19,13 @@ interface LessonOption {
   subjects?: { subject: Subject }[];
 }
 
+interface RoomBooking {
+  room_id: string;
+  day_of_week: DayOfWeek;
+  start_time: string;
+  end_time: string;
+}
+
 interface Props {
   teacherId: string;
   schoolYear: number;
@@ -29,13 +36,15 @@ interface Props {
   sessions: SlotSession[];
   yearConfig: SchoolYearConfig | null;
   exceptions: CalendarExceptionRow[];
+  roomBookings: RoomBooking[];
 }
 
 const DAYS: DayOfWeek[] = [0, 1, 2, 3, 4];
 
 export default function AnnualPlanner({
-  teacherId, schoolYear, classes, rooms, lessons, slots: initSlots, sessions: initSessions, yearConfig, exceptions,
+  teacherId, schoolYear, classes, rooms, lessons, slots: initSlots, sessions: initSessions, yearConfig, exceptions, roomBookings: initRoomBookings,
 }: Props) {
+  const [roomBookings, setRoomBookings] = useState<RoomBooking[]>(initRoomBookings);
   const [slots, setSlots] = useState<TeachingSlot[]>(initSlots);
   const [sessions, setSessions] = useState<SlotSession[]>(initSessions);
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(initSlots[0]?.id ?? null);
@@ -52,14 +61,15 @@ export default function AnnualPlanner({
   }, [sessions]);
 
   const range = useMemo(() => getYearRange(schoolYear, yearConfig), [schoolYear, yearConfig]);
-  const noSchool = useMemo(() => getNoSchoolDates(range.start, range.end), [range]);
-  const exForCalc = useMemo(() => exceptions.map((e) => ({ date: e.date, closed: e.closed })), [exceptions]);
+  const noSchool = useMemo(() => getNoSchoolMap(range.start, range.end), [range]);
+  const exForCalc = useMemo(() => exceptions.map((e) => ({ date: e.date, closed: e.closed, reason: e.reason })), [exceptions]);
 
   const selectedSlot = slots.find((s) => s.id === selectedSlotId) ?? null;
-  const dates = useMemo(() => {
+  const schedule = useMemo(() => {
     if (!selectedSlot) return [];
-    return getSlotDates(selectedSlot.day_of_week, range, noSchool, exForCalc);
+    return getSlotSchedule(selectedSlot.day_of_week, range, noSchool, exForCalc);
   }, [selectedSlot, range, noSchool, exForCalc]);
+  const schoolDayCount = schedule.filter((s) => !s.blocked).length;
 
   if (classes.length === 0) {
     return (
@@ -87,14 +97,18 @@ export default function AnnualPlanner({
 
         {showAddSlot && (
           <AddSlotForm
-            classes={classes} rooms={rooms} schoolYear={schoolYear} teacherId={teacherId} busy={busy}
+            classes={classes} rooms={rooms} roomBookings={roomBookings} schoolYear={schoolYear} teacherId={teacherId} busy={busy}
             onCreate={async (fd) => {
               setBusy(true);
               const res = await createTeachingSlot(fd);
               setBusy(false);
               if ((res as any).slot) {
-                setSlots((p) => [...p, (res as any).slot]);
-                setSelectedSlotId((res as any).slot.id);
+                const ns = (res as any).slot;
+                setSlots((p) => [...p, ns]);
+                if (ns.room_id) {
+                  setRoomBookings((p) => [...p, { room_id: ns.room_id, day_of_week: ns.day_of_week, start_time: ns.start_time, end_time: ns.end_time }]);
+                }
+                setSelectedSlotId(ns.id);
                 setShowAddSlot(false);
                 return null;
               }
@@ -126,6 +140,13 @@ export default function AnnualPlanner({
                       setBusy(false);
                       setSlots((p) => p.filter((s) => s.id !== slot.id));
                       setSessions((p) => p.filter((s) => s.slot_id !== slot.id));
+                      if (slot.room_id) {
+                        setRoomBookings((p) => {
+                          const idx = p.findIndex((b) => b.room_id === slot.room_id && b.day_of_week === slot.day_of_week && b.start_time === slot.start_time);
+                          if (idx < 0) return p;
+                          const c = [...p]; c.splice(idx, 1); return c;
+                        });
+                      }
                       if (selectedSlotId === slot.id) setSelectedSlotId(null);
                     }}
                     className={`text-xs ${active ? "text-blue-100 hover:text-white" : "text-red-400 hover:text-red-600"}`}
@@ -145,7 +166,7 @@ export default function AnnualPlanner({
             <h2 className="text-lg font-semibold text-gray-800">
               שיעורים — {classMap[selectedSlot.class_id]?.name} · {DAY_NAMES[selectedSlot.day_of_week]} {selectedSlot.start_time.slice(0, 5)}–{selectedSlot.end_time.slice(0, 5)}
             </h2>
-            <span className="text-xs text-gray-400">{dates.length} מפגשים (ללא חגים)</span>
+            <span className="text-xs text-gray-400">{schoolDayCount} מפגשים (ללא חגים)</span>
           </div>
 
           {lessons.length === 0 && (
@@ -156,15 +177,25 @@ export default function AnnualPlanner({
           )}
 
           <div className="bg-white border border-gray-200 rounded-xl divide-y divide-gray-100">
-            {dates.map((d) => {
-              const ymd = toYMD(d);
+            {schedule.map((item) => {
+              const ymd = item.ymd;
+              if (item.blocked) {
+                return (
+                  <div key={ymd} className="flex items-center gap-3 px-4 py-2.5 bg-gray-50/60">
+                    <span className="text-xs text-gray-400 w-24 shrink-0">{DAY_NAMES[selectedSlot.day_of_week]} {formatDateHe(item.date)}</span>
+                    <span className="text-sm text-gray-400 flex items-center gap-1">
+                      <span>🚫</span> אין לימודים{item.reason ? ` — ${item.reason}` : ""}
+                    </span>
+                  </div>
+                );
+              }
               const session = sessionByKey.get(`${selectedSlot.id}|${ymd}`);
               const lesson: any = session?.lesson ?? (session?.lesson_id ? lessonMap[session.lesson_id] : null);
               const color = lesson?.subjects?.[0]?.subject?.color ?? "#6366f1";
               return (
                 <div key={ymd} className="flex items-center justify-between gap-3 px-4 py-2.5">
                   <div className="flex items-center gap-3 min-w-0">
-                    <span className="text-xs text-gray-400 w-24 shrink-0">{DAY_NAMES[selectedSlot.day_of_week]} {formatDateHe(d)}</span>
+                    <span className="text-xs text-gray-400 w-24 shrink-0">{DAY_NAMES[selectedSlot.day_of_week]} {formatDateHe(item.date)}</span>
                     {lesson ? (
                       <span className="rounded-md px-2 py-1 text-sm border-r-2 truncate"
                         style={{ borderRightColor: color, backgroundColor: `${color}18` }}>
@@ -191,7 +222,7 @@ export default function AnnualPlanner({
                 </div>
               );
             })}
-            {dates.length === 0 && (
+            {schedule.length === 0 && (
               <p className="px-4 py-6 text-center text-sm text-gray-400">אין מפגשים בטווח השנה.</p>
             )}
           </div>
@@ -243,14 +274,22 @@ export default function AnnualPlanner({
 }
 
 function AddSlotForm({
-  classes, rooms, schoolYear, teacherId, busy, onCreate,
+  classes, rooms, roomBookings, schoolYear, teacherId, busy, onCreate,
 }: {
-  classes: Class[]; rooms: Room[]; schoolYear: number; teacherId: string; busy: boolean;
+  classes: Class[]; rooms: Room[]; roomBookings: RoomBooking[]; schoolYear: number; teacherId: string; busy: boolean;
   onCreate: (fd: FormData) => Promise<string | null>;
 }) {
   const [error, setError] = useState<string | null>(null);
+  const [day, setDay] = useState<DayOfWeek>(0);
   const [start, setStart] = useState(TIME_SLOTS[0]);
   const [end, setEnd] = useState(TIME_SLOTS[1]);
+
+  // rooms already booked at the chosen day + overlapping time (across all teachers)
+  const takenRoomIds = new Set(
+    roomBookings
+      .filter((b) => b.day_of_week === day && b.start_time.slice(0, 5) < end && b.end_time.slice(0, 5) > start)
+      .map((b) => b.room_id)
+  );
 
   return (
     <form
@@ -270,7 +309,8 @@ function AddSlotForm({
       </label>
       <label className="text-sm">
         <span className="block text-gray-600 mb-1">יום</span>
-        <select name="day_of_week" required className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm">
+        <select name="day_of_week" required value={day} onChange={(e) => setDay(parseInt(e.target.value) as DayOfWeek)}
+          className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm">
           {DAYS.map((d) => <option key={d} value={d}>{DAY_NAMES[d]}</option>)}
         </select>
       </label>
@@ -292,8 +332,12 @@ function AddSlotForm({
         <span className="block text-gray-600 mb-1">חדר (אופציונלי)</span>
         <select name="room_id" className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm">
           <option value="">ללא חדר קבוע</option>
-          {rooms.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+          {rooms.map((r) => {
+            const taken = takenRoomIds.has(r.id);
+            return <option key={r.id} value={r.id} disabled={taken}>{r.name}{taken ? " — תפוס" : ""}</option>;
+          })}
         </select>
+        <p className="text-xs text-gray-400 mt-1">חדרים שכבר תפוסים ביום ובשעה שנבחרו מסומנים ולא ניתנים לבחירה.</p>
       </label>
       {error && <p className="sm:col-span-2 text-sm text-red-600">{error}</p>}
       <div className="sm:col-span-2">

@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import type { DayOfWeek } from "@/lib/types";
+import { DAY_NAMES } from "@/lib/types";
 
 // ===== AUTH =====
 
@@ -341,14 +342,36 @@ export async function createTeachingSlot(formData: FormData) {
   const formTeacher = formData.get("teacher_id") as string | null;
   const teacher_id = isAdmin && formTeacher ? formTeacher : user.id;
 
+  const class_id = formData.get("class_id") as string;
+  const school_year = parseInt(formData.get("school_year") as string);
+  const day_of_week = parseInt(formData.get("day_of_week") as string);
+  const start_time = formData.get("start_time") as string;
+  const end_time = formData.get("end_time") as string;
+  const room_id = (formData.get("room_id") as string) || null;
+
+  // Prevent double-booking a room: same room + year + weekday with overlapping time.
+  if (room_id) {
+    const { data: clash } = await supabase
+      .from("teaching_slots")
+      .select("start_time, end_time, class:classes(name), teacher:profiles(full_name)")
+      .eq("room_id", room_id)
+      .eq("school_year", school_year)
+      .eq("day_of_week", day_of_week)
+      .lt("start_time", end_time)
+      .gt("end_time", start_time)
+      .limit(1);
+    if (clash && clash.length > 0) {
+      const c = clash[0] as any;
+      const cls = c.class?.name ? `כיתה ${c.class.name} ` : "";
+      const who = c.teacher?.full_name ? ` (${c.teacher.full_name})` : "";
+      return {
+        error: `החדר כבר תפוס ביום ${DAY_NAMES[day_of_week as DayOfWeek]} בשעות ${String(c.start_time).slice(0, 5)}–${String(c.end_time).slice(0, 5)} ${cls}${who}`,
+      };
+    }
+  }
+
   const { data, error } = await supabase.from("teaching_slots").insert({
-    teacher_id,
-    class_id: formData.get("class_id") as string,
-    school_year: parseInt(formData.get("school_year") as string),
-    day_of_week: parseInt(formData.get("day_of_week") as string),
-    start_time: formData.get("start_time") as string,
-    end_time: formData.get("end_time") as string,
-    room_id: (formData.get("room_id") as string) || null,
+    teacher_id, class_id, school_year, day_of_week, start_time, end_time, room_id,
   }).select().single();
   if (error) return { error: error.message };
   revalidatePath("/schedule/plan");

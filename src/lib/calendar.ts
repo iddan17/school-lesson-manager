@@ -39,16 +39,18 @@ const NO_SCHOOL_BASENAMES = new Set([
   "Tish'a B'Av",
 ]);
 
-export function getNoSchoolDates(start: Date, end: Date): Set<string> {
+// Maps each Israeli no-school date in range to its Hebrew holiday name.
+export function getNoSchoolMap(start: Date, end: Date): Map<string, string> {
   const events = HebrewCalendar.calendar({ start, end, il: true });
-  const out = new Set<string>();
+  const out = new Map<string, string>();
   for (const ev of events) {
     const f = ev.getFlags();
     const isChag = (f & flags.CHAG) !== 0;
     const isCholHamoed = (f & flags.CHOL_HAMOED) !== 0;
     const named = NO_SCHOOL_BASENAMES.has(ev.basename());
     if (isChag || isCholHamoed || named) {
-      out.add(toYMD(ev.getDate().greg()));
+      const ymd = toYMD(ev.getDate().greg());
+      if (!out.has(ymd)) out.set(ymd, ev.render("he"));
     }
   }
   return out;
@@ -57,18 +59,27 @@ export function getNoSchoolDates(start: Date, end: Date): Set<string> {
 export interface CalendarException {
   date: string; // yyyy-mm-dd
   closed: boolean; // true = force no-school, false = force school day
+  reason?: string | null;
 }
 
-// Every calendar date in range that falls on `dayOfWeek`, minus no-school days.
-// An explicit exception always wins over the computed holiday set.
-export function getSlotDates(
+export interface SlotDay {
+  date: Date;
+  ymd: string;
+  blocked: boolean; // true = no lesson can be placed (holiday / closed)
+  reason: string | null; // why it's blocked (holiday name etc.)
+}
+
+// Every calendar date in range that falls on `dayOfWeek`, each flagged as a
+// school day or a blocked (holiday/closed) day. An explicit exception always
+// wins over the computed holiday set.
+export function getSlotSchedule(
   dayOfWeek: DayOfWeek,
   range: YearRange,
-  noSchool: Set<string>,
+  noSchool: Map<string, string>,
   exceptions: CalendarException[]
-): Date[] {
-  const exMap = new Map(exceptions.map((e) => [e.date, e.closed]));
-  const result: Date[] = [];
+): SlotDay[] {
+  const exMap = new Map(exceptions.map((e) => [e.date, e]));
+  const result: SlotDay[] = [];
   const d = new Date(range.start);
   d.setHours(0, 0, 0, 0);
   const end = new Date(range.end);
@@ -76,9 +87,20 @@ export function getSlotDates(
   while (d <= end) {
     if (d.getDay() === dayOfWeek) {
       const ymd = toYMD(d);
-      const override = exMap.get(ymd);
-      const isNoSchool = override !== undefined ? override : noSchool.has(ymd);
-      if (!isNoSchool) result.push(new Date(d));
+      const ex = exMap.get(ymd);
+      let blocked: boolean;
+      let reason: string | null;
+      if (ex) {
+        blocked = ex.closed;
+        reason = ex.closed ? (ex.reason || "אין לימודים") : null;
+      } else if (noSchool.has(ymd)) {
+        blocked = true;
+        reason = noSchool.get(ymd) ?? "חג";
+      } else {
+        blocked = false;
+        reason = null;
+      }
+      result.push({ date: new Date(d), ymd, blocked, reason });
     }
     d.setDate(d.getDate() + 1);
   }

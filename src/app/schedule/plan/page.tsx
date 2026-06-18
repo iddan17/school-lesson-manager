@@ -25,6 +25,7 @@ export default async function PlanPage({
     { data: slots },
     { data: yearConfig },
     { data: exceptions },
+    { data: roomBookings },
   ] = await Promise.all([
     supabase.from("classes").select("*").order("grade"),
     supabase.from("rooms").select("*").order("name"),
@@ -42,6 +43,7 @@ export default async function PlanPage({
       .order("start_time"),
     supabase.from("school_year_config").select("*").eq("school_year", schoolYear).maybeSingle(),
     supabase.from("calendar_exceptions").select("*").eq("school_year", schoolYear),
+    supabase.from("teaching_slots").select("room_id, day_of_week, start_time, end_time").eq("school_year", schoolYear).not("room_id", "is", null),
   ]);
 
   // sessions for the current teacher's slots
@@ -97,6 +99,7 @@ export default async function PlanPage({
           sessions={sessions as any}
           yearConfig={yearConfig ?? null}
           exceptions={exceptions ?? []}
+          roomBookings={(roomBookings ?? []) as any}
         />
       </main>
     </>
