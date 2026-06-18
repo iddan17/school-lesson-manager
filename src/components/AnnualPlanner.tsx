@@ -61,7 +61,7 @@ export default function AnnualPlanner({
   }, [sessions]);
 
   const range = useMemo(() => getYearRange(schoolYear, yearConfig), [schoolYear, yearConfig]);
-  const noSchool = useMemo(() => getNoSchoolMap(range.start, range.end), [range]);
+  const noSchool = useMemo(() => getNoSchoolMap(schoolYear, range.start, range.end), [schoolYear, range]);
   const exForCalc = useMemo(() => exceptions.map((e) => ({ date: e.date, closed: e.closed, reason: e.reason })), [exceptions]);
 
   const selectedSlot = slots.find((s) => s.id === selectedSlotId) ?? null;

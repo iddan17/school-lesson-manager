@@ -39,10 +39,61 @@ const NO_SCHOOL_BASENAMES = new Set([
   "Tish'a B'Av",
 ]);
 
+// Parse "yyyy-mm-dd" into a LOCAL-midnight Date (avoids UTC day-shift).
+function parseYMD(s: string): Date {
+  const [y, m, d] = s.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
+// Official Israeli Ministry of Education vacation spans, keyed by school year
+// (the September year). Each span is inclusive [start, end] of no-school days.
+// Sourced from the published תשפ"ו / תשפ"ז calendars; admins refine via
+// calendar_exceptions. Years not listed fall back to the Hebrew-calendar calc.
+const MINISTRY_VACATIONS: Record<number, { start: string; end: string; name: string }[]> = {
+  // תשפ"ו — 2025/2026
+  2025: [
+    { start: "2025-09-22", end: "2025-09-24", name: "ראש השנה" },
+    { start: "2025-10-01", end: "2025-10-14", name: "יום כיפור וסוכות" },
+    { start: "2025-12-16", end: "2025-12-22", name: "חנוכה" },
+    { start: "2026-03-03", end: "2026-03-04", name: "פורים" },
+    { start: "2026-03-24", end: "2026-04-08", name: "פסח" },
+    { start: "2026-04-22", end: "2026-04-22", name: "יום העצמאות" },
+    { start: "2026-05-05", end: "2026-05-05", name: "ל\"ג בעומר" },
+    { start: "2026-05-21", end: "2026-05-22", name: "שבועות" },
+  ],
+  // תשפ"ז — 2026/2027
+  2026: [
+    { start: "2026-09-11", end: "2026-09-13", name: "ראש השנה" },
+    { start: "2026-09-20", end: "2026-10-03", name: "יום כיפור וסוכות" },
+    { start: "2026-12-06", end: "2026-12-12", name: "חנוכה" },
+    { start: "2027-03-23", end: "2027-03-24", name: "פורים" },
+    { start: "2027-04-13", end: "2027-04-28", name: "פסח" },
+    { start: "2027-05-12", end: "2027-05-12", name: "יום העצמאות" },
+    { start: "2027-05-25", end: "2027-05-25", name: "ל\"ג בעומר" },
+    { start: "2027-06-11", end: "2027-06-12", name: "שבועות" },
+  ],
+};
+
 // Maps each Israeli no-school date in range to its Hebrew holiday name.
-export function getNoSchoolMap(start: Date, end: Date): Map<string, string> {
-  const events = HebrewCalendar.calendar({ start, end, il: true });
+// Uses the official Ministry vacation list for the given school year when
+// available; otherwise derives holidays from the Hebrew calendar (@hebcal).
+export function getNoSchoolMap(schoolYear: number, start: Date, end: Date): Map<string, string> {
   const out = new Map<string, string>();
+
+  const ministry = MINISTRY_VACATIONS[schoolYear];
+  if (ministry) {
+    for (const v of ministry) {
+      const d = parseYMD(v.start);
+      const last = parseYMD(v.end);
+      while (d <= last) {
+        out.set(toYMD(d), v.name);
+        d.setDate(d.getDate() + 1);
+      }
+    }
+    return out;
+  }
+
+  const events = HebrewCalendar.calendar({ start, end, il: true });
   for (const ev of events) {
     const f = ev.getFlags();
     const isChag = (f & flags.CHAG) !== 0;
