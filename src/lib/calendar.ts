@@ -70,7 +70,7 @@ const MINISTRY_VACATIONS: Record<number, { start: string; end: string; name: str
     { start: "2027-04-13", end: "2027-04-28", name: "פסח" },
     { start: "2027-05-12", end: "2027-05-12", name: "יום העצמאות" },
     { start: "2027-05-25", end: "2027-05-25", name: "ל\"ג בעומר" },
-    { start: "2027-06-11", end: "2027-06-12", name: "שבועות" },
+    { start: "2027-06-10", end: "2027-06-11", name: "שבועות" },
   ],
 };
 
