@@ -40,7 +40,7 @@ const NO_SCHOOL_BASENAMES = new Set([
 ]);
 
 // Parse "yyyy-mm-dd" into a LOCAL-midnight Date (avoids UTC day-shift).
-function parseYMD(s: string): Date {
+export function parseYMD(s: string): Date {
   const [y, m, d] = s.split("-").map(Number);
   return new Date(y, m - 1, d);
 }
