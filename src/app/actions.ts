@@ -18,16 +18,52 @@ function usernameToEmail(username: string): string {
   return `${username.trim().toLowerCase()}@${LOGIN_DOMAIN}`;
 }
 
+// Pre-existing accounts (created with real emails) mapped to their new username.
+// On first username login they get their password reset to FIXED_PASSWORD so the
+// app can sign them in; their email is left untouched.
+const LEGACY_USERS: Record<string, string> = {
+  admin: "admin@admin.com",
+  hadar: "hadar.arugot@gmail.com",
+};
+
+function adminClient() {
+  return createAdminClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  );
+}
+
+// Reset a legacy account's password to the fixed one so username login works.
+async function migrateLegacyPassword(email: string): Promise<void> {
+  try {
+    const admin = adminClient();
+    const { data } = await admin.auth.admin.listUsers({ page: 1, perPage: 200 });
+    const u = data.users.find((x) => x.email?.toLowerCase() === email.toLowerCase());
+    if (u) await admin.auth.admin.updateUserById(u.id, { password: FIXED_PASSWORD, email_confirm: true });
+  } catch {
+    // best-effort; login simply fails if this can't run
+  }
+}
+
 // ===== AUTH =====
 
 export async function login(_: unknown, formData: FormData) {
   const supabase = await createClient();
   const username = ((formData.get("username") as string) || "").trim().toLowerCase();
   if (!username) return { error: "יש להזין שם משתמש" };
-  const { error } = await supabase.auth.signInWithPassword({
-    email: usernameToEmail(username),
-    password: FIXED_PASSWORD,
-  });
+
+  // Legacy accounts keep their real email; new accounts use <username>@lessons.local
+  const email = LEGACY_USERS[username] ?? usernameToEmail(username);
+
+  let { error } = await supabase.auth.signInWithPassword({ email, password: FIXED_PASSWORD });
+
+  // First login for a legacy user: migrate their password, then retry.
+  if (error && LEGACY_USERS[username]) {
+    await migrateLegacyPassword(email);
+    ({ error } = await supabase.auth.signInWithPassword({ email, password: FIXED_PASSWORD }));
+  }
+
   if (error) return { error: "שם משתמש לא קיים" };
   redirect("/dashboard");
 }
