@@ -2,7 +2,6 @@
 
 import { useActionState } from "react";
 import { login } from "@/app/actions";
-import Link from "next/link";
 
 export default function LoginPage() {
   const [state, action, pending] = useActionState(login, undefined);
@@ -15,21 +14,15 @@ export default function LoginPage() {
 
         <form action={action} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">אימייל</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">שם משתמש</label>
             <input
-              name="email"
-              type="email"
+              name="username"
+              type="text"
               required
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">סיסמה</label>
-            <input
-              name="password"
-              type="password"
-              required
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              autoFocus
+              autoComplete="username"
+              dir="ltr"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-left focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
           {(state as any)?.error && (
@@ -43,18 +36,6 @@ export default function LoginPage() {
             {pending ? "מתחבר..." : "כניסה"}
           </button>
         </form>
-
-        <p className="mt-3 text-sm text-center">
-          <Link href="/auth/forgot-password" className="text-gray-500 hover:text-blue-600 hover:underline">
-            שכחתי סיסמה
-          </Link>
-        </p>
-        <p className="mt-2 text-sm text-center text-gray-500">
-          אין לך חשבון?{" "}
-          <Link href="/auth/register" className="text-blue-600 hover:underline">
-            הרשמה
-          </Link>
-        </p>
       </div>
     </div>
   );

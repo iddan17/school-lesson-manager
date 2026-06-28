@@ -1,20 +1,34 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import type { DayOfWeek } from "@/lib/types";
 import { DAY_NAMES } from "@/lib/types";
 
+// Username-only login: Supabase still requires a password, so every account uses a
+// synthetic email (<username>@lessons.local) plus this one fixed internal password
+// that the app supplies automatically. There is intentionally no per-user password.
+const LOGIN_DOMAIN = "lessons.local";
+const FIXED_PASSWORD = "Lessons!Shared#Login-2026";
+
+function usernameToEmail(username: string): string {
+  return `${username.trim().toLowerCase()}@${LOGIN_DOMAIN}`;
+}
+
 // ===== AUTH =====
 
 export async function login(_: unknown, formData: FormData) {
   const supabase = await createClient();
-  const email = formData.get("email") as string;
-  const password = formData.get("password") as string;
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) return { error: error.message };
+  const username = ((formData.get("username") as string) || "").trim().toLowerCase();
+  if (!username) return { error: "יש להזין שם משתמש" };
+  const { error } = await supabase.auth.signInWithPassword({
+    email: usernameToEmail(username),
+    password: FIXED_PASSWORD,
+  });
+  if (error) return { error: "שם משתמש לא קיים" };
   redirect("/dashboard");
 }
 
@@ -326,6 +340,44 @@ export async function deleteRoom(id: string) {
 export async function updateUserRole(userId: string, role: "teacher" | "admin") {
   const supabase = await createClient();
   await supabase.from("profiles").update({ role }).eq("id", userId);
+  redirect("/admin");
+}
+
+// Admin creates a username-only account (no password). Uses the service-role
+// admin API so it does NOT affect the admin's own session.
+export async function createUserAccount(formData: FormData): Promise<void> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/auth/login");
+  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user!.id).single();
+  if (profile?.role !== "admin") redirect("/dashboard");
+
+  const username = ((formData.get("username") as string) || "").trim().toLowerCase();
+  const full_name = ((formData.get("full_name") as string) || "").trim();
+  const role = (formData.get("role") as string) === "admin" ? "admin" : "teacher";
+  if (!username || !full_name) {
+    redirect("/admin?user_error=" + encodeURIComponent("יש למלא שם משתמש ושם מלא"));
+  }
+  if (!/^[a-z0-9._-]+$/.test(username)) {
+    redirect("/admin?user_error=" + encodeURIComponent("שם המשתמש יכול להכיל רק אותיות לועזיות, ספרות, נקודה, מקף או קו תחתון"));
+  }
+
+  const admin = createAdminClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  );
+  const { error } = await admin.auth.admin.createUser({
+    email: usernameToEmail(username),
+    password: FIXED_PASSWORD,
+    email_confirm: true,
+    user_metadata: { full_name, role },
+  });
+  if (error) {
+    const msg = /already|exists|registered/i.test(error.message) ? "שם המשתמש כבר קיים" : error.message;
+    redirect("/admin?user_error=" + encodeURIComponent(msg));
+  }
+  revalidatePath("/admin");
   redirect("/admin");
 }
 
