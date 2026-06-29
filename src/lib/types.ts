@@ -109,16 +109,21 @@ export interface AlternativeSlot {
   end_time: string;
 }
 
+export type SlotKind = "lesson" | "transport";
+
 export interface TeachingSlot {
   id: string;
   teacher_id: string;
-  class_id: string;
+  class_id: string | null;
   school_year: number;
   day_of_week: DayOfWeek;
   start_time: string;
   end_time: string;
   room_id: string | null;
   created_at: string;
+  kind: SlotKind;
+  name: string | null; // transport name (kind = transport)
+  duration_minutes: number | null; // transport duration
   // joined
   teacher?: Profile;
   class?: Class;
@@ -131,6 +136,9 @@ export interface SlotSession {
   date: string; // yyyy-mm-dd
   lesson_id: string | null;
   room_id: string | null;
+  start_time: string | null; // optional per-date custom time
+  end_time: string | null;
+  duration_minutes: number | null; // alternative to start/end
   created_at: string;
   // joined
   lesson?: Lesson;

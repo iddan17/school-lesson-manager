@@ -54,7 +54,7 @@ export default async function SchedulePage({
   if (slotIds.length) {
     const { data } = await supabase
       .from("slot_sessions")
-      .select("slot_id, date, lesson:lessons(id, title, subjects:lesson_subjects(subject:subjects(*)))")
+      .select("slot_id, date, start_time, end_time, duration_minutes, lesson:lessons(id, title, subjects:lesson_subjects(subject:subjects(*)))")
       .in("slot_id", slotIds)
       .gte("date", weekYMD[0])
       .lte("date", weekYMD[4]);
@@ -134,9 +134,21 @@ export default async function SchedulePage({
                       return (
                         <td key={day} className={`p-1 align-top border-r border-gray-100 last:border-0 ${info.blocked ? "bg-gray-50" : ""}`}>
                           {!info.blocked && cellSlots(day, time).map((slot) => {
-                            const session = sessionByKey.get(`${slot.id}|${weekYMD[day]}`);
-                            const lesson = (session as any)?.lesson;
+                            if (slot.kind === "transport") {
+                              return (
+                                <div key={slot.id} className="rounded-md px-2 py-1.5 mb-1 border-r-2 border-amber-400 bg-amber-50">
+                                  <div className="font-semibold text-gray-900 leading-tight truncate">🚌 {slot.name}</div>
+                                  <div className="text-gray-500 truncate">{slot.duration_minutes} דק׳</div>
+                                  <div className="text-gray-400 truncate">{(slot.teacher as any)?.full_name}</div>
+                                </div>
+                              );
+                            }
+                            const session: any = sessionByKey.get(`${slot.id}|${weekYMD[day]}`);
+                            const lesson = session?.lesson;
                             const color = lesson?.subjects?.[0]?.subject?.color ?? "#6366f1";
+                            const timeLabel = session?.start_time && session?.end_time
+                              ? `${String(session.start_time).slice(0, 5)}–${String(session.end_time).slice(0, 5)}`
+                              : session?.duration_minutes ? `${session.duration_minutes} דק׳` : null;
                             return (
                               <div key={slot.id} className="rounded-md px-2 py-1.5 mb-1 border-r-2"
                                 style={{ borderRightColor: color, backgroundColor: `${color}14` }}>
@@ -144,7 +156,7 @@ export default async function SchedulePage({
                                   {(slot.class as any)?.name}
                                 </div>
                                 {lesson ? (
-                                  <div className="text-gray-700 truncate">{lesson.title}</div>
+                                  <div className="text-gray-700 truncate">{lesson.title}{timeLabel ? ` · ${timeLabel}` : ""}</div>
                                 ) : (
                                   <div className="text-gray-300 truncate">— ללא שיעור —</div>
                                 )}

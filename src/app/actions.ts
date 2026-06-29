@@ -34,17 +34,6 @@ function adminClient() {
   );
 }
 
-// Reset a legacy account's password to the fixed one so username login works.
-async function migrateLegacyPassword(email: string): Promise<void> {
-  try {
-    const admin = adminClient();
-    const { data } = await admin.auth.admin.listUsers({ page: 1, perPage: 200 });
-    const u = data.users.find((x) => x.email?.toLowerCase() === email.toLowerCase());
-    if (u) await admin.auth.admin.updateUserById(u.id, { password: FIXED_PASSWORD, email_confirm: true });
-  } catch {
-    // best-effort; login simply fails if this can't run
-  }
-}
 
 // ===== AUTH =====
 
@@ -55,16 +44,13 @@ export async function login(_: unknown, formData: FormData) {
 
   // Legacy accounts keep their real email; new accounts use <username>@lessons.local
   const email = LEGACY_USERS[username] ?? usernameToEmail(username);
+  // Accounts with a real password (admin/hadar) type it; passwordless teachers
+  // leave it blank and the app supplies the fixed internal password.
+  const typed = String(formData.get("password") ?? "");
+  const password = typed.length ? typed : FIXED_PASSWORD;
 
-  let { error } = await supabase.auth.signInWithPassword({ email, password: FIXED_PASSWORD });
-
-  // First login for a legacy user: migrate their password, then retry.
-  if (error && LEGACY_USERS[username]) {
-    await migrateLegacyPassword(email);
-    ({ error } = await supabase.auth.signInWithPassword({ email, password: FIXED_PASSWORD }));
-  }
-
-  if (error) return { error: "שם משתמש לא קיים" };
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) return { error: "שם משתמש או סיסמה שגויים" };
   redirect("/dashboard");
 }
 
@@ -419,6 +405,12 @@ export async function createUserAccount(formData: FormData): Promise<void> {
 
 // ===== ANNUAL PLANNING: teaching slots + per-date sessions =====
 
+function addMinutes(time: string, mins: number): string {
+  const [h, m] = time.split(":").map(Number);
+  const total = (h * 60 + m + mins) % (24 * 60);
+  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+}
+
 export async function createTeachingSlot(formData: FormData) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -430,10 +422,27 @@ export async function createTeachingSlot(formData: FormData) {
   const formTeacher = formData.get("teacher_id") as string | null;
   const teacher_id = isAdmin && formTeacher ? formTeacher : user.id;
 
-  const class_id = formData.get("class_id") as string;
+  const kind = (formData.get("kind") as string) === "transport" ? "transport" : "lesson";
   const school_year = parseInt(formData.get("school_year") as string);
   const day_of_week = parseInt(formData.get("day_of_week") as string);
   const start_time = formData.get("start_time") as string;
+
+  if (kind === "transport") {
+    const name = ((formData.get("name") as string) || "").trim();
+    const duration_minutes = parseInt(formData.get("duration_minutes") as string) || 30;
+    if (!name) return { error: "יש להזין שם להסעה" };
+    const { data, error } = await supabase.from("teaching_slots").insert({
+      teacher_id, kind: "transport", name, duration_minutes,
+      class_id: null, school_year, day_of_week, start_time,
+      end_time: addMinutes(start_time, duration_minutes), room_id: null,
+    }).select().single();
+    if (error) return { error: error.message };
+    revalidatePath("/schedule/plan");
+    revalidatePath("/schedule");
+    return { slot: data };
+  }
+
+  const class_id = formData.get("class_id") as string;
   const end_time = formData.get("end_time") as string;
   const room_id = (formData.get("room_id") as string) || null;
 
@@ -459,7 +468,7 @@ export async function createTeachingSlot(formData: FormData) {
   }
 
   const { data, error } = await supabase.from("teaching_slots").insert({
-    teacher_id, class_id, school_year, day_of_week, start_time, end_time, room_id,
+    teacher_id, kind: "lesson", class_id, school_year, day_of_week, start_time, end_time, room_id,
   }).select().single();
   if (error) return { error: error.message };
   revalidatePath("/schedule/plan");
@@ -480,13 +489,21 @@ export async function assignSessionLesson(
   slotId: string,
   date: string,
   lessonId: string,
-  roomId?: string | null
+  opts?: { start_time?: string | null; end_time?: string | null; duration_minutes?: number | null; roomId?: string | null }
 ) {
   const supabase = await createClient();
   const { error } = await supabase
     .from("slot_sessions")
     .upsert(
-      { slot_id: slotId, date, lesson_id: lessonId, room_id: roomId ?? null },
+      {
+        slot_id: slotId,
+        date,
+        lesson_id: lessonId,
+        room_id: opts?.roomId ?? null,
+        start_time: opts?.start_time ?? null,
+        end_time: opts?.end_time ?? null,
+        duration_minutes: opts?.duration_minutes ?? null,
+      },
       { onConflict: "slot_id,date" }
     );
   if (error) return { error: error.message };
