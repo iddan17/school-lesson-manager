@@ -43,7 +43,7 @@ export default async function DashboardPage() {
           />
           <ActionCard
             href="/schedule/plan"
-            title="תכנן מערכת שעות"
+            title="תכנון שנתי"
             desc="שבץ שיעורים לכיתות ולחריצי זמן"
             icon="📅"
           />

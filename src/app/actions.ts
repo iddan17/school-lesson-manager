@@ -406,6 +406,24 @@ export async function createUserAccount(formData: FormData): Promise<void> {
   redirect("/admin");
 }
 
+export async function deleteUserAccount(userId: string): Promise<void> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/auth/login");
+  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user!.id).single();
+  if (profile?.role !== "admin") redirect("/dashboard");
+  if (userId === user!.id) redirect("/admin"); // can't delete yourself
+
+  const admin = createAdminClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  );
+  await admin.auth.admin.deleteUser(userId);
+  revalidatePath("/admin");
+  redirect("/admin");
+}
+
 // ===== ANNUAL PLANNING: teaching slots + per-date sessions =====
 
 function addMinutes(time: string, mins: number): string {

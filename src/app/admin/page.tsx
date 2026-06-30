@@ -6,7 +6,7 @@ import {
   createClass, deleteClass,
   createRoom, deleteRoom,
   createSchool, deleteSchool,
-  updateUserRole,
+  updateUserRole, deleteUserAccount,
 } from "@/app/actions";
 import CreateUserForm from "@/components/CreateUserForm";
 import { GRADE_NAMES } from "@/lib/types";
@@ -177,11 +177,16 @@ export default async function AdminPage({
                     </td>
                     <td className="px-4 py-2 text-left">
                       {u.id !== user!.id && (
-                        <form action={updateUserRole.bind(null, u.id, u.role === "admin" ? "teacher" : "admin")}>
-                          <button type="submit" className="text-blue-500 hover:text-blue-700 text-xs">
-                            {u.role === "admin" ? "הפוך למורה" : "הפוך למנהל"}
-                          </button>
-                        </form>
+                        <div className="flex gap-4 justify-end">
+                          <form action={updateUserRole.bind(null, u.id, u.role === "admin" ? "teacher" : "admin")}>
+                            <button type="submit" className="text-blue-500 hover:text-blue-700 text-xs">
+                              {u.role === "admin" ? "הפוך למורה" : "הפוך למנהל"}
+                            </button>
+                          </form>
+                          <form action={deleteUserAccount.bind(null, u.id)}>
+                            <button type="submit" className="text-red-500 hover:text-red-700 text-xs">מחק</button>
+                          </form>
+                        </div>
                       )}
                     </td>
                   </tr>
