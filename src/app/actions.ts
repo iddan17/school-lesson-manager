@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
+import { createHash } from "crypto";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
@@ -14,8 +15,18 @@ import { DAY_NAMES } from "@/lib/types";
 const LOGIN_DOMAIN = "lessons.local";
 const FIXED_PASSWORD = "Lessons!Shared#Login-2026";
 
+// Hash the username into an email-safe synthetic address, so usernames can be
+// any text (including Hebrew) — emails can't contain Hebrew/spaces.
 function usernameToEmail(username: string): string {
-  return `${username.trim().toLowerCase()}@${LOGIN_DOMAIN}`;
+  const norm = username.trim().toLowerCase();
+  const hash = createHash("sha256").update(norm).digest("hex").slice(0, 32);
+  return `u${hash}@${LOGIN_DOMAIN}`;
+}
+
+// Older accounts used the raw <username>@lessons.local form (ASCII only).
+function legacyUsernameEmail(username: string): string | null {
+  const norm = username.trim().toLowerCase();
+  return /^[a-z0-9._-]+$/.test(norm) ? `${norm}@${LOGIN_DOMAIN}` : null;
 }
 
 // Pre-existing accounts (created with real emails) mapped to their new username.
@@ -49,7 +60,14 @@ export async function login(_: unknown, formData: FormData) {
   const typed = String(formData.get("password") ?? "");
   const password = typed.length ? typed : FIXED_PASSWORD;
 
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  let { error } = await supabase.auth.signInWithPassword({ email, password });
+  // Backward-compat for accounts created with the old raw-username email.
+  if (error && !LEGACY_USERS[username]) {
+    const legacy = legacyUsernameEmail(username);
+    if (legacy && legacy !== email) {
+      ({ error } = await supabase.auth.signInWithPassword({ email: legacy, password }));
+    }
+  }
   if (error) return { error: "שם משתמש או סיסמה שגויים" };
   redirect("/dashboard");
 }
@@ -367,25 +385,18 @@ export async function updateUserRole(userId: string, role: "teacher" | "admin") 
 
 // Admin creates a username-only account (no password). Uses the service-role
 // admin API so it does NOT affect the admin's own session.
-export async function createUserAccount(formData: FormData): Promise<void> {
+export async function createUserAccount(formData: FormData): Promise<{ error?: string }> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/auth/login");
-  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user!.id).single();
-  if (profile?.role !== "admin") redirect("/dashboard");
+  if (!user) return { error: "לא מחובר" };
+  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+  if (profile?.role !== "admin") return { error: "אין הרשאה" };
 
-  const username = ((formData.get("username") as string) || "").trim().toLowerCase();
+  const username = ((formData.get("username") as string) || "").trim();
   const role = (formData.get("role") as string) === "admin" ? "admin" : "teacher";
   const adminPassword = (formData.get("password") as string) || "";
-  if (!username) {
-    redirect("/admin?user_error=" + encodeURIComponent("יש למלא שם משתמש"));
-  }
-  if (!/^[a-z0-9._-]+$/.test(username)) {
-    redirect("/admin?user_error=" + encodeURIComponent("שם המשתמש יכול להכיל רק אותיות לועזיות, ספרות, נקודה, מקף או קו תחתון"));
-  }
-  if (role === "admin" && adminPassword.length < 4) {
-    redirect("/admin?user_error=" + encodeURIComponent("למנהל יש להזין סיסמה (לפחות 4 תווים)"));
-  }
+  if (!username) return { error: "יש למלא שם משתמש" };
+  if (role === "admin" && adminPassword.length < 4) return { error: "למנהל יש להזין סיסמה (לפחות 4 תווים)" };
 
   const admin = createAdminClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -396,14 +407,14 @@ export async function createUserAccount(formData: FormData): Promise<void> {
     email: usernameToEmail(username),
     password: role === "admin" ? adminPassword : FIXED_PASSWORD,
     email_confirm: true,
-    user_metadata: { full_name: username, role },
+    user_metadata: { full_name: username, username: username.toLowerCase(), role },
   });
   if (error) {
-    const msg = /already|exists|registered/i.test(error.message) ? "שם המשתמש כבר קיים" : error.message;
-    redirect("/admin?user_error=" + encodeURIComponent(msg));
+    const msg = /already|exists|registered|duplicate/i.test(error.message) ? "שם המשתמש כבר קיים" : error.message;
+    return { error: msg };
   }
   revalidatePath("/admin");
-  redirect("/admin");
+  return {};
 }
 
 export async function deleteUserAccount(userId: string): Promise<void> {

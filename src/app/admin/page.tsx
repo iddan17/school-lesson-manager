@@ -11,12 +11,7 @@ import {
 import CreateUserForm from "@/components/CreateUserForm";
 import { GRADE_NAMES } from "@/lib/types";
 
-export default async function AdminPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ user_error?: string }>;
-}) {
-  const params = await searchParams;
+export default async function AdminPage() {
   const supabase = await createClient();
 
   const [user, profile, { data: schools }, { data: classes }, { data: rooms }, { data: users }] = await Promise.all([
@@ -193,7 +188,7 @@ export default async function AdminPage({
                 ))}
               </tbody>
             </table>
-            <CreateUserForm error={params.user_error} />
+            <CreateUserForm />
           </div>
         </section>
       </main>
