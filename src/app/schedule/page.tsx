@@ -16,9 +16,26 @@ export default async function SchedulePage({
   const supabase = await createClient();
   const params = await searchParams;
 
-  // ── Resolve the displayed week (Sunday-based) and its school year ──
-  const base = params.week ? parseYMD(params.week) : new Date();
+  // ── Resolve the school year + which week to show ──
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const syOf = (d: Date) => (d.getMonth() >= 8 ? d.getFullYear() : d.getFullYear() - 1);
+  const cm = today.getMonth();
+  const schoolYear = params.week
+    ? syOf(parseYMD(params.week))
+    : cm >= 8 ? today.getFullYear() : cm <= 5 ? today.getFullYear() - 1 : today.getFullYear();
+
+  const { data: yearCfg } = await supabase
+    .from("school_year_config").select("start_date, end_date").eq("school_year", schoolYear).maybeSingle();
+  const yearStart = yearCfg?.start_date ? parseYMD(yearCfg.start_date) : new Date(schoolYear, 8, 1);
+  const yearEnd = yearCfg?.end_date ? parseYMD(yearCfg.end_date) : new Date(schoolYear + 1, 5, 30);
+
+  // No explicit week → start of the school year until it's underway, then today.
+  let base: Date;
+  if (params.week) base = parseYMD(params.week);
+  else if (today < yearStart || today > yearEnd) base = new Date(yearStart);
+  else base = new Date(today);
   base.setHours(0, 0, 0, 0);
+
   const weekStart = new Date(base);
   weekStart.setDate(base.getDate() - base.getDay()); // back up to Sunday
   const weekDates = DAYS.map((i) => {
@@ -27,7 +44,6 @@ export default async function SchedulePage({
     return d;
   });
   const weekYMD = weekDates.map(toYMD);
-  const schoolYear = weekStart.getMonth() >= 8 ? weekStart.getFullYear() : weekStart.getFullYear() - 1;
   const prev = new Date(weekStart); prev.setDate(weekStart.getDate() - 7);
   const next = new Date(weekStart); next.setDate(weekStart.getDate() + 7);
 
