@@ -11,7 +11,7 @@ const DAYS: DayOfWeek[] = [0, 1, 2, 3, 4];
 export default async function SchedulePage({
   searchParams,
 }: {
-  searchParams: Promise<{ class_id?: string; teacher_id?: string; week?: string }>;
+  searchParams: Promise<{ class_label?: string; teacher_id?: string; week?: string }>;
 }) {
   const supabase = await createClient();
   const params = await searchParams;
@@ -31,19 +31,20 @@ export default async function SchedulePage({
   const prev = new Date(weekStart); prev.setDate(weekStart.getDate() - 7);
   const next = new Date(weekStart); next.setDate(weekStart.getDate() + 7);
 
-  const filterQS = `${params.class_id ? `&class_id=${params.class_id}` : ""}${params.teacher_id ? `&teacher_id=${params.teacher_id}` : ""}`;
+  const filterQS = `${params.class_label ? `&class_label=${encodeURIComponent(params.class_label)}` : ""}${params.teacher_id ? `&teacher_id=${params.teacher_id}` : ""}`;
 
-  const [{ data: classes }, { data: teachers }, { data: exceptions }] = await Promise.all([
-    supabase.from("classes").select("*, school:schools(name)").order("school_id").order("grade"),
+  const [{ data: labelRows }, { data: teachers }, { data: exceptions }] = await Promise.all([
+    supabase.from("teaching_slots").select("class_label").eq("school_year", schoolYear).not("class_label", "is", null),
     supabase.from("profiles").select("id, full_name").order("full_name"),
     supabase.from("calendar_exceptions").select("date, closed, reason").eq("school_year", schoolYear),
   ]);
+  const classLabels = Array.from(new Set((labelRows ?? []).map((r: any) => r.class_label as string))).sort();
 
   let slotQuery = supabase
     .from("teaching_slots")
     .select("*, class:classes(name), teacher:profiles(id, full_name), room:rooms(name)")
     .eq("school_year", schoolYear);
-  if (params.class_id) slotQuery = slotQuery.eq("class_id", params.class_id);
+  if (params.class_label) slotQuery = slotQuery.eq("class_label", params.class_label);
   if (params.teacher_id) slotQuery = slotQuery.eq("teacher_id", params.teacher_id);
   const { data: slots } = await slotQuery;
   const all = slots ?? [];
@@ -97,7 +98,7 @@ export default async function SchedulePage({
         </div>
 
         <div className="mb-6">
-          <ScheduleWeekFilters classes={(classes ?? []) as any} teachers={teachers ?? []} />
+          <ScheduleWeekFilters classLabels={classLabels} teachers={teachers ?? []} />
         </div>
 
         {all.length === 0 ? (
@@ -153,7 +154,7 @@ export default async function SchedulePage({
                               <div key={slot.id} className="rounded-md px-2 py-1.5 mb-1 border-r-2"
                                 style={{ borderRightColor: color, backgroundColor: `${color}14` }}>
                                 <div className="font-semibold text-gray-900 leading-tight truncate">
-                                  {(slot.class as any)?.name}
+                                  {slot.class_label ?? (slot.class as any)?.name}
                                 </div>
                                 {lesson ? (
                                   <div className="text-gray-700 truncate">{lesson.title}{timeLabel ? ` · ${timeLabel}` : ""}</div>

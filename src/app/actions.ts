@@ -375,13 +375,16 @@ export async function createUserAccount(formData: FormData): Promise<void> {
   if (profile?.role !== "admin") redirect("/dashboard");
 
   const username = ((formData.get("username") as string) || "").trim().toLowerCase();
-  const full_name = ((formData.get("full_name") as string) || "").trim();
   const role = (formData.get("role") as string) === "admin" ? "admin" : "teacher";
-  if (!username || !full_name) {
-    redirect("/admin?user_error=" + encodeURIComponent("יש למלא שם משתמש ושם מלא"));
+  const adminPassword = (formData.get("password") as string) || "";
+  if (!username) {
+    redirect("/admin?user_error=" + encodeURIComponent("יש למלא שם משתמש"));
   }
   if (!/^[a-z0-9._-]+$/.test(username)) {
     redirect("/admin?user_error=" + encodeURIComponent("שם המשתמש יכול להכיל רק אותיות לועזיות, ספרות, נקודה, מקף או קו תחתון"));
+  }
+  if (role === "admin" && adminPassword.length < 4) {
+    redirect("/admin?user_error=" + encodeURIComponent("למנהל יש להזין סיסמה (לפחות 4 תווים)"));
   }
 
   const admin = createAdminClient(
@@ -391,9 +394,9 @@ export async function createUserAccount(formData: FormData): Promise<void> {
   );
   const { error } = await admin.auth.admin.createUser({
     email: usernameToEmail(username),
-    password: FIXED_PASSWORD,
+    password: role === "admin" ? adminPassword : FIXED_PASSWORD,
     email_confirm: true,
-    user_metadata: { full_name, role },
+    user_metadata: { full_name: username, role },
   });
   if (error) {
     const msg = /already|exists|registered/i.test(error.message) ? "שם המשתמש כבר קיים" : error.message;
@@ -442,7 +445,7 @@ export async function createTeachingSlot(formData: FormData) {
     return { slot: data };
   }
 
-  const class_id = formData.get("class_id") as string;
+  const class_label = ((formData.get("class_label") as string) || "").trim() || null;
   const end_time = formData.get("end_time") as string;
   const room_id = (formData.get("room_id") as string) || null;
 
@@ -468,7 +471,7 @@ export async function createTeachingSlot(formData: FormData) {
   }
 
   const { data, error } = await supabase.from("teaching_slots").insert({
-    teacher_id, kind: "lesson", class_id, school_year, day_of_week, start_time, end_time, room_id,
+    teacher_id, kind: "lesson", class_id: null, class_label, school_year, day_of_week, start_time, end_time, room_id,
   }).select().single();
   if (error) return { error: error.message };
   revalidatePath("/schedule/plan");

@@ -6,8 +6,9 @@ import {
   createClass, deleteClass,
   createRoom, deleteRoom,
   createSchool, deleteSchool,
-  updateUserRole, createUserAccount,
+  updateUserRole,
 } from "@/app/actions";
+import CreateUserForm from "@/components/CreateUserForm";
 import { GRADE_NAMES } from "@/lib/types";
 
 export default async function AdminPage({
@@ -187,25 +188,7 @@ export default async function AdminPage({
                 ))}
               </tbody>
             </table>
-            <div className="border-t border-gray-100 bg-gray-50 p-3">
-              {params.user_error && (
-                <p className="text-red-600 text-xs mb-2">{params.user_error}</p>
-              )}
-              <form action={createUserAccount} className="flex flex-wrap items-end gap-2">
-                <input name="username" placeholder="שם משתמש" required dir="ltr"
-                  className="flex-1 min-w-[120px] border border-gray-300 rounded-lg px-3 py-1.5 text-sm text-left" />
-                <input name="full_name" placeholder="שם מלא" required
-                  className="flex-1 min-w-[120px] border border-gray-300 rounded-lg px-3 py-1.5 text-sm" />
-                <select name="role" className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm">
-                  <option value="teacher">מורה</option>
-                  <option value="admin">מנהל</option>
-                </select>
-                <button type="submit" className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-blue-700">
-                  + צור משתמש
-                </button>
-              </form>
-              <p className="text-xs text-gray-400 mt-1">המשתמש ייכנס עם שם המשתמש בלבד (ללא סיסמה).</p>
-            </div>
+            <CreateUserForm error={params.user_error} />
           </div>
         </section>
       </main>

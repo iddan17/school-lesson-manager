@@ -115,6 +115,7 @@ export interface TeachingSlot {
   id: string;
   teacher_id: string;
   class_id: string | null;
+  class_label: string | null; // free-text class (replaces the class bank)
   school_year: number;
   day_of_week: DayOfWeek;
   start_time: string;

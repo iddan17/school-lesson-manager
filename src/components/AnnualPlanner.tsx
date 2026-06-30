@@ -28,6 +28,7 @@ interface RoomBooking {
 
 interface Props {
   teacherId: string;
+  canEdit: boolean;
   schoolYear: number;
   classes: Class[];
   rooms: Room[];
@@ -42,13 +43,13 @@ interface Props {
 const DAYS: DayOfWeek[] = [0, 1, 2, 3, 4];
 
 export default function AnnualPlanner({
-  teacherId, schoolYear, classes, rooms, lessons, slots: initSlots, sessions: initSessions, yearConfig, exceptions, roomBookings: initRoomBookings,
+  teacherId, canEdit, schoolYear, classes, rooms, lessons, slots: initSlots, sessions: initSessions, yearConfig, exceptions, roomBookings: initRoomBookings,
 }: Props) {
   const [roomBookings, setRoomBookings] = useState<RoomBooking[]>(initRoomBookings);
   const [slots, setSlots] = useState<TeachingSlot[]>(initSlots);
   const [sessions, setSessions] = useState<SlotSession[]>(initSessions);
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(initSlots[0]?.id ?? null);
-  const [showAddSlot, setShowAddSlot] = useState(initSlots.length === 0);
+  const [showAddSlot, setShowAddSlot] = useState(canEdit && initSlots.length === 0);
   const [assigning, setAssigning] = useState<{ date: string } | null>(null);
   const [timeMode, setTimeMode] = useState<"default" | "range" | "duration">("default");
   const [busy, setBusy] = useState(false);
@@ -80,33 +81,23 @@ export default function AnnualPlanner({
   }, [selectedSlot, range, noSchool, exForCalc]);
   const schoolDayCount = schedule.filter((s) => !s.blocked).length;
 
-  if (classes.length === 0) {
-    return (
-      <div className="text-center py-16 bg-white border border-gray-200 rounded-xl">
-        <p className="text-4xl mb-3">🏫</p>
-        <p className="text-lg font-semibold text-gray-700 mb-1">אין כיתות במערכת</p>
-        <Link href="/admin" className="inline-block mt-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700">
-          עבור לניהול מערכת
-        </Link>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-8">
       {/* ── Teaching slots ── */}
       <section>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-semibold text-gray-800">שיבוצים קבועים</h2>
-          <button onClick={() => setShowAddSlot((v) => !v)}
-            className="text-sm text-blue-600 hover:underline">
-            {showAddSlot ? "סגור" : "+ שיבוץ חדש"}
-          </button>
+          {canEdit && (
+            <button onClick={() => setShowAddSlot((v) => !v)}
+              className="text-sm text-blue-600 hover:underline">
+              {showAddSlot ? "סגור" : "+ שיבוץ חדש"}
+            </button>
+          )}
         </div>
 
-        {showAddSlot && (
+        {canEdit && showAddSlot && (
           <AddSlotForm
-            classes={classes} rooms={rooms} roomBookings={roomBookings} schoolYear={schoolYear} teacherId={teacherId} busy={busy}
+            rooms={rooms} roomBookings={roomBookings} schoolYear={schoolYear} teacherId={teacherId} busy={busy}
             onCreate={async (fd) => {
               setBusy(true);
               const res = await createTeachingSlot(fd);
@@ -134,7 +125,7 @@ export default function AnnualPlanner({
               const active = slot.id === selectedSlotId;
               const label = slot.kind === "transport"
                 ? `🚌 ${slot.name} · ${DAY_NAMES[slot.day_of_week]} · ${slot.start_time.slice(0, 5)}`
-                : `${classMap[slot.class_id ?? ""]?.name ?? "כיתה"} · ${DAY_NAMES[slot.day_of_week]} · ${slot.start_time.slice(0, 5)}`;
+                : `${slot.class_label ?? classMap[slot.class_id ?? ""]?.name ?? "כיתה"} · ${DAY_NAMES[slot.day_of_week]} · ${slot.start_time.slice(0, 5)}`;
               return (
                 <div key={slot.id}
                   className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${
@@ -143,6 +134,7 @@ export default function AnnualPlanner({
                   <button onClick={() => setSelectedSlotId(slot.id)} className="font-medium">
                     {label}
                   </button>
+                  {canEdit && (
                   <button
                     onClick={async () => {
                       if (!confirm("למחוק שיבוץ זה? כל השיעורים ששויכו אליו יימחקו.")) return;
@@ -163,6 +155,7 @@ export default function AnnualPlanner({
                     className={`text-xs ${active ? "text-blue-100 hover:text-white" : "text-red-400 hover:text-red-600"}`}
                     title="מחק שיבוץ"
                   >✕</button>
+                  )}
                 </div>
               );
             })}
@@ -177,7 +170,7 @@ export default function AnnualPlanner({
             <h2 className="text-lg font-semibold text-gray-800">
               {isTransport
                 ? `🚌 הסעה — ${selectedSlot.name} · ${DAY_NAMES[selectedSlot.day_of_week]} ${selectedSlot.start_time.slice(0, 5)}–${selectedSlot.end_time.slice(0, 5)}`
-                : `שיעורים — ${classMap[selectedSlot.class_id ?? ""]?.name ?? ""} · ${DAY_NAMES[selectedSlot.day_of_week]} ${selectedSlot.start_time.slice(0, 5)}–${selectedSlot.end_time.slice(0, 5)}`}
+                : `שיעורים — ${selectedSlot.class_label ?? classMap[selectedSlot.class_id ?? ""]?.name ?? ""} · ${DAY_NAMES[selectedSlot.day_of_week]} ${selectedSlot.start_time.slice(0, 5)}–${selectedSlot.end_time.slice(0, 5)}`}
             </h2>
             <span className="text-xs text-gray-400">{schoolDayCount} מפגשים (ללא חגים)</span>
           </div>
@@ -230,6 +223,7 @@ export default function AnnualPlanner({
                       <span className="text-sm text-gray-300">— ללא שיעור —</span>
                     )}
                   </div>
+                  {canEdit && (
                   <div className="flex items-center gap-3 shrink-0">
                     <button onClick={() => setAssigning({ date: ymd })}
                       className="text-xs text-blue-600 hover:underline">
@@ -244,6 +238,7 @@ export default function AnnualPlanner({
                       }} className="text-xs text-red-400 hover:text-red-600">נקה</button>
                     )}
                   </div>
+                  )}
                 </div>
               );
             })}
@@ -260,7 +255,7 @@ export default function AnnualPlanner({
           <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
             <h3 className="text-lg font-bold text-gray-900 mb-1">שיוך שיעור</h3>
             <p className="text-sm text-gray-500 mb-4">
-              {classMap[selectedSlot.class_id ?? ""]?.name} · {assigning.date.split("-").reverse().join("/")}
+              {selectedSlot.class_label ?? classMap[selectedSlot.class_id ?? ""]?.name} · {assigning.date.split("-").reverse().join("/")}
             </p>
             <label className="block text-sm font-medium text-gray-700 mb-1">שיעור</label>
             <select id="assign-lesson" defaultValue=""
@@ -336,9 +331,9 @@ export default function AnnualPlanner({
 }
 
 function AddSlotForm({
-  classes, rooms, roomBookings, schoolYear, teacherId, busy, onCreate,
+  rooms, roomBookings, schoolYear, teacherId, busy, onCreate,
 }: {
-  classes: Class[]; rooms: Room[]; roomBookings: RoomBooking[]; schoolYear: number; teacherId: string; busy: boolean;
+  rooms: Room[]; roomBookings: RoomBooking[]; schoolYear: number; teacherId: string; busy: boolean;
   onCreate: (fd: FormData) => Promise<string | null>;
 }) {
   const [error, setError] = useState<string | null>(null);
@@ -379,9 +374,8 @@ function AddSlotForm({
       {kind === "lesson" ? (
         <label className="text-sm">
           <span className="block text-gray-600 mb-1">כיתה</span>
-          <select name="class_id" required className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm">
-            {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
+          <input name="class_label" required placeholder="למשל: ז׳1 / כיתת אם"
+            className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm" />
         </label>
       ) : (
         <label className="text-sm">

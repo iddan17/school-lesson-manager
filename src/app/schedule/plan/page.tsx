@@ -15,7 +15,9 @@ export default async function PlanPage({
   const [user, profile] = await Promise.all([getCurrentUser(), getProfile()]);
   const isAdmin = profile?.role === "admin";
   const schoolYear = parseInt(params.year ?? String(new Date().getFullYear()));
-  const teacherId = isAdmin && params.teacher_id ? params.teacher_id : user!.id;
+  // Anyone can view any teacher's plan; you can only edit your own (or admin edits all).
+  const teacherId = params.teacher_id ?? user!.id;
+  const canEdit = teacherId === user!.id || isAdmin;
 
   const [
     { data: classes },
@@ -57,9 +59,9 @@ export default async function PlanPage({
     sessions = data ?? [];
   }
 
-  const allLessons = lessonsRaw ?? [];
-  // schedulable: admin → any lesson; teacher → their own private lessons (matches the old planner)
-  const lessons = isAdmin ? allLessons : allLessons.filter((l) => l.teacher_id === user!.id && !(l as any).is_public);
+  // Everyone can schedule any lesson from the shared bank.
+  const lessons = lessonsRaw ?? [];
+  const viewingTeacher = teachers?.find((t) => t.id === teacherId);
 
   const currentYear = new Date().getFullYear();
 
@@ -76,12 +78,16 @@ export default async function PlanPage({
               <option key={y} value={y}>{y}–{y + 1}</option>
             ))}
           </FilterSelect>
-          {isAdmin && (
-            <FilterSelect name="teacher_id" value={teacherId} label="מורה" action="/schedule/plan">
-              {teachers?.map((t) => <option key={t.id} value={t.id}>{t.full_name}</option>)}
-            </FilterSelect>
-          )}
+          <FilterSelect name="teacher_id" value={teacherId} label="מורה" action="/schedule/plan">
+            {teachers?.map((t) => <option key={t.id} value={t.id}>{t.full_name}</option>)}
+          </FilterSelect>
         </div>
+
+        {!canEdit && (
+          <div className="mb-6 bg-amber-50 border border-amber-200 rounded-lg px-4 py-2.5 text-sm text-amber-800">
+            צפייה בתכנון של {viewingTeacher?.full_name ?? "מורה אחר"} (קריאה בלבד).
+          </div>
+        )}
 
         {isAdmin && (
           <div className="mb-6">
@@ -91,6 +97,7 @@ export default async function PlanPage({
 
         <AnnualPlanner
           teacherId={teacherId}
+          canEdit={canEdit}
           schoolYear={schoolYear}
           classes={classes ?? []}
           rooms={rooms ?? []}

@@ -1,13 +1,13 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import type { Class, Profile } from "@/lib/types";
+import type { Profile } from "@/lib/types";
 
 export default function ScheduleWeekFilters({
-  classes,
+  classLabels,
   teachers,
 }: {
-  classes: (Class & { school?: { name: string } | null })[];
+  classLabels: string[];
   teachers: Pick<Profile, "id" | "full_name">[];
 }) {
   const router = useRouter();
@@ -24,13 +24,9 @@ export default function ScheduleWeekFilters({
 
   return (
     <div className="flex flex-wrap gap-3">
-      <select className={sel} aria-label="כיתה" value={sp.get("class_id") ?? ""} onChange={(e) => setParam("class_id", e.target.value)}>
+      <select className={sel} aria-label="כיתה" value={sp.get("class_label") ?? ""} onChange={(e) => setParam("class_label", e.target.value)}>
         <option value="">כל הכיתות</option>
-        {classes.map((c) => (
-          <option key={c.id} value={c.id}>
-            {c.name}{c.school?.name ? ` — ${c.school.name}` : ""}
-          </option>
-        ))}
+        {classLabels.map((c) => <option key={c} value={c}>{c}</option>)}
       </select>
       <select className={sel} aria-label="מורה" value={sp.get("teacher_id") ?? ""} onChange={(e) => setParam("teacher_id", e.target.value)}>
         <option value="">כל המורים</option>
